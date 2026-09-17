@@ -36,6 +36,13 @@
       "when": 1789641541570,
       "tag": "0004_rental_end_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789643857837,
+      "tag": "0005_rental_end_lookup_idx",
+      "breakpoints": true
     }
   ]
 }

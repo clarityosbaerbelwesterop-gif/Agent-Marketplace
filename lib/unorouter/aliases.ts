@@ -72,6 +72,37 @@ function isPlaceholder(modelId: string): boolean {
   );
 }
 
+export const PAID_MODEL_ALIASES: readonly ModelAlias[] = [
+  "advanced",
+  "expert",
+  "elite",
+  "frontier",
+];
+
+export function isPaidModelAlias(alias: ModelAlias): boolean {
+  return alias !== "standard";
+}
+
+/** UnoRouter free-tier IDs use a `:free` suffix (quickstart + models.dev). */
+export function isFreeModelId(modelId: string): boolean {
+  return modelId.trim().toLowerCase().includes(":free");
+}
+
+/**
+ * Paid aliases never use `:free` models — not as primary, not as fallback.
+ * Standard may use free IDs. Env overrides that try to downgrade a paid
+ * alias are dropped (fallbacks) or rejected (primary).
+ */
+export function filterSameTierModelIds(
+  alias: ModelAlias,
+  modelIds: readonly string[],
+): string[] {
+  if (!isPaidModelAlias(alias)) {
+    return [...modelIds];
+  }
+  return modelIds.filter((id) => !isFreeModelId(id) && !isPlaceholder(id));
+}
+
 export function isModelAlias(value: string): value is ModelAlias {
   return (MODEL_ALIASES as readonly string[]).includes(value);
 }
@@ -109,8 +140,19 @@ export function resolveAlias(input: AliasInput): AliasResolution {
     });
   }
 
-  const uniqueFallbacks = fallbacks.filter(
-    (id) => id !== primary && !isPlaceholder(id),
+  if (isPaidModelAlias(alias) && isFreeModelId(primary)) {
+    throw new UnorouterError({
+      message:
+        `Model alias "${alias}" cannot use a :free UnoRouter ID (${primary}). ` +
+        `Paid tiers do not fall back to free models. Set ${envName(alias)} to a paid catalog ID.`,
+      code: "alias_unresolved",
+      status: 503,
+    });
+  }
+
+  const uniqueFallbacks = filterSameTierModelIds(
+    alias,
+    fallbacks.filter((id) => id !== primary && !isPlaceholder(id)),
   );
 
   return {

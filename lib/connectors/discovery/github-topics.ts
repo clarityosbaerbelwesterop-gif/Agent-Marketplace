@@ -1,3 +1,4 @@
+import { catalogOnlyCandidate } from "./catalog";
 import { fetchJsonWithTimeout } from "./http";
 import { GITHUB_TOPIC_SOURCE } from "./sources";
 import type { DiscoveryCandidate, DiscoveryWarning } from "./types";
@@ -61,15 +62,15 @@ export async function fetchGithubTopicRepos(
       typeof row.description === "string" && row.description.trim()
         ? row.description.trim()
         : "";
-    items.push({
-      name,
-      repoUrl,
-      description,
-      source: GITHUB_TOPIC_SOURCE.id,
-      sourceRef: fullName || name,
-      grantable: false,
-      untrusted: true,
-    });
+    items.push(
+      catalogOnlyCandidate({
+        name,
+        repoUrl,
+        description,
+        source: GITHUB_TOPIC_SOURCE.id,
+        sourceRef: fullName || name,
+      }),
+    );
   }
 
   return { items, warning: null };

@@ -1,4 +1,14 @@
-export { getAliasMap, isModelAlias, modelsForAlias, normalizeAlias, resolveAlias } from "./aliases";
+export {
+  getAliasMap,
+  isModelAlias,
+  isFreeModelId,
+  isPaidModelAlias,
+  modelsForAlias,
+  normalizeAlias,
+  resolveAlias,
+  filterSameTierModelIds,
+  PAID_MODEL_ALIASES,
+} from "./aliases";
 export {
   CATALOG_SNAPSHOT,
   assertToolsSupported,

@@ -176,6 +176,7 @@ Catalog writes (new agents, publishing skills, the 10k seed) go through `getDb()
 pnpm db:generate      # drizzle-kit generate
 pnpm db:migrate       # drizzle-kit migrate (needs DATABASE_URL_UNPOOLED)
 pnpm db:seed:agents   # upsert ~10k agent_profiles + published skill packs
+pnpm test             # node:test smoke suite (pure helpers; no live secrets)
 ```
 
 Apply `drizzle/*.sql` to Neon in order. Then run `pnpm db:seed:agents` against `DATABASE_URL_UNPOOLED`.
@@ -264,10 +265,112 @@ Webhook endpoint: `POST /api/webhooks/stripe`. Configure that URL in the Stripe 
 
 Webhook writes use `getDb()` (privileged). `rental_payments` and `stripe_events` have FORCE RLS and no authenticated policies.
 
+## Production go-live checklist
+
+Do this once on the production Neon branch and the linked Vercel project before taking paid traffic. Secrets stay in Vercel / Stripe / Neon — never commit them. Success redirects must not activate rentals.
+
+### 1. Vercel project link
+
+- [ ] Create or open the Vercel project and link this GitHub repo (`main` → Production).
+- [ ] Set `NEXT_PUBLIC_APP_URL` to the production origin (`https://<domain>`, no trailing slash). `VERCEL_URL` is only a fallback for preview.
+- [ ] Confirm Production env vars are set for **all** of the groups below (not Preview-only).
+
+### 2. Required environment variables
+
+**App**
+
+| Variable | Notes |
+| --- | --- |
+| `NEXT_PUBLIC_APP_URL` | Public origin used for Stripe success/cancel URLs and OAuth callbacks |
+
+**Neon (Lakebase Postgres)**
+
+| Variable | Notes |
+| --- | --- |
+| `DATABASE_URL` | Pooled (`-pooler`) `neondb_owner` URI for Next.js (`getDb()` / privileged) |
+| `DATABASE_URL_UNPOOLED` | Direct URI for `pnpm db:migrate` (PgBouncer breaks some DDL) |
+| `DATABASE_AUTHENTICATED_URL` | Optional LOGIN role **without** `BYPASSRLS` for `withUserRls()` |
+
+**Neon Auth**
+
+| Variable | Notes |
+| --- | --- |
+| `NEON_AUTH_BASE_URL` | Auth endpoint from Neon Console → Auth → Configuration |
+| `NEON_AUTH_COOKIE_SECRET` | ≥ 32 characters |
+| `NEXT_PUBLIC_NEON_AUTH_URL` | Public Auth URL for the browser client |
+| `NEON_AUTH_JWKS_URL` | Optional; defaults conceptually to `${NEON_AUTH_BASE_URL}/.well-known/jwks.json` |
+
+**Stripe Checkout (marketplace billing — not the tenant Stripe connector)**
+
+| Variable | Notes |
+| --- | --- |
+| `STRIPE_SECRET_KEY` | Live `sk_live_…` in production (`sk_test_…` only for preview) |
+| `STRIPE_WEBHOOK_SECRET` | Signing secret for the production webhook endpoint |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Matching `pk_live_…` / `pk_test_…` |
+
+Empty Stripe keys make checkout and webhook routes return HTTP 503. There is no unpaid bypass.
+
+**UNOROUTER**
+
+| Variable | Notes |
+| --- | --- |
+| `UNOROUTER_API_KEY` | Create at https://unorouter.com/en/token. Missing key → chat runtime HTTP 503 |
+| `UNOROUTER_BASE_URL` | Optional; default `https://api.unorouter.com/v1` |
+| `UNOROUTER_MODEL_<ALIAS>` / `_FALLBACKS` | Optional same-tier overrides. Paid aliases must not use `:free` IDs |
+
+**Connector OAuth (optional; GitHub / Slack / Vercel)**
+
+| Variable | Notes |
+| --- | --- |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | Authorization-code grants |
+| `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET` | Same |
+| `VERCEL_CLIENT_ID` / `VERCEL_CLIENT_SECRET` | Same |
+| `CONNECTOR_OAUTH_STATE_SECRET` | ≥ 32 chars; falls back to `NEON_AUTH_COOKIE_SECRET` |
+| `GITHUB_DISCOVERY_TOKEN` | Optional GitHub Search rate-limit token for catalog-only MCP discovery. Do **not** reuse a tenant `GITHUB_TOKEN` |
+
+If OAuth env is missing, grant POST stays `pending` (no fake success). API-key connectors still need tenant secrets posted by the renter.
+
+### 3. Stripe webhook URL
+
+- [ ] In the Stripe Dashboard, add endpoint `https://<NEXT_PUBLIC_APP_URL>/api/webhooks/stripe`.
+- [ ] Subscribe at least: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `payment_intent.succeeded`, `checkout.session.expired`, `checkout.session.async_payment_failed`.
+- [ ] Copy the endpoint signing secret into `STRIPE_WEBHOOK_SECRET`.
+- [ ] Send a test event and confirm `{ received: true }` (duplicates return `{ duplicate: true }`).
+
+### 4. Neon Auth Trusted Domains
+
+- [ ] In Neon Console → Auth → Trusted Domains, add the production origin and any custom domain (scheme + host, matching `NEXT_PUBLIC_APP_URL`).
+- [ ] Add `http://localhost:3000` only for local/dev, not as a substitute for production.
+- [ ] Confirm Google (and email/password) callback hosts match those domains.
+
+### 5. Migrations `0000`–`0004` (plus `0005` indexes)
+
+Apply `drizzle/*.sql` **in order** against `DATABASE_URL_UNPOOLED` (`pnpm db:migrate`):
+
+| File | What it does |
+| --- | --- |
+| `drizzle/0000_marketplace_schema.sql` | Marketplace tables, RLS, `auth.user_id()` |
+| `drizzle/0001_grant_anonymous.sql` | Grant `anonymous` to the privileged login role |
+| `drizzle/0002_stripe_billing.sql` | `rental_payments`, `stripe_events` |
+| `drizzle/0003_connector_grant_secrets.sql` | Connector grant credentials column |
+| `drizzle/0004_rental_end_audit.sql` | `ended_at` / `ended_by_user_id` / `end_reason` |
+| `drizzle/0005_rental_end_lookup_idx.sql` | Session/run indexes used by rental end |
+
+Then seed once: `pnpm db:seed:agents` (idempotent upsert; do not re-seed unless the generator changed).
+
+### 6. Smoke after deploy
+
+- [ ] `GET /api/agents?pageSize=1` returns a page (not the full catalog).
+- [ ] Sign-in via `/login`; `/api/rentals` without a session is 401.
+- [ ] Create Checkout (`POST /api/checkout` and `POST /api/rentals` stay aligned: `{ slug, durationId }`; checkout also returns `url`).
+- [ ] Pay in Stripe test/live; webhook sets `rentals.status=active`. Client success URL `/chat?rentalId=` is **not** trusted.
+- [ ] Chat against that rental; ended/pending/expired rentals return HTTP 409 (`Rental has ended` / pending / expired copy).
+- [ ] `GET /api/connectors/discover?q=github` items have `grantable: false`.
+
 ## Coding notes
 
 - Default to Server Components. Add `"use client"` only when browser APIs or React hooks are required.
 - In Next.js 16+, `params`, `searchParams`, `cookies()`, and `headers()` are async — `await` them.
 - Import with the `@/` alias (repo root).
 - Keep environment secrets in `.env.local`. Commit only `.env.example` with empty placeholders.
-- `pnpm typecheck`, `pnpm lint`, and `pnpm build` must stay green on PRs.
+- `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` must stay green on PRs.

@@ -1,4 +1,5 @@
 import { CONNECTOR_IDS } from "../types";
+import { withDiscoveryInvariant } from "./catalog";
 import { fetchGithubTopicRepos } from "./github-topics";
 import { fetchOfficialRegistry } from "./official-registry";
 import { DISCOVERY_SOURCES } from "./sources";
@@ -81,7 +82,7 @@ export async function searchDiscoveredConnectors(
     ),
   ).slice(0, MAX_ITEMS);
 
-  const result: DiscoverySearchResult = {
+  const result = withDiscoveryInvariant({
     catalogOnly: true,
     notice: NOTICE,
     query,
@@ -94,7 +95,7 @@ export async function searchDiscoveredConnectors(
     grantableConnectorIds: CONNECTOR_IDS,
     items,
     warnings,
-  };
+  });
 
   cache.set(cacheKey, { expiresAt: Date.now() + CACHE_TTL_MS, result });
   return result;

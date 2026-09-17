@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import { jsonError, readJsonBody, requireApiUser } from "@/lib/api/guard";
-import { createRentalCheckout, listRentals } from "@/lib/runtime/rentals";
+import { requireApiUser } from "@/lib/api/guard";
+import { postCreateRentalCheckout } from "@/lib/api/create-rental";
+import { listRentals } from "@/lib/runtime/rentals";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function GET() {
   const auth = await requireApiUser();
@@ -13,28 +15,11 @@ export async function GET() {
   return NextResponse.json({ items });
 }
 
+/**
+ * Create a pending rental + Stripe Checkout Session.
+ * Same body contract as POST /api/checkout (`slug`, `durationId`).
+ * Checkout additionally aliases `url` = `checkoutUrl`.
+ */
 export async function POST(request: Request) {
-  const auth = await requireApiUser();
-  if (!auth.ok) {
-    return auth.response;
-  }
-  const json = await readJsonBody(request);
-  if (!json.ok) {
-    return json.response;
-  }
-  const body = json.body;
-  if (!body || typeof body !== "object") {
-    return jsonError("Invalid JSON", 400);
-  }
-  const payload = body as { slug?: unknown; durationId?: unknown };
-  const result = await createRentalCheckout({
-    userId: auth.userId,
-    slug: String(payload.slug ?? ""),
-    durationId:
-      typeof payload.durationId === "string" ? payload.durationId : undefined,
-  });
-  if (!result.ok) {
-    return jsonError(result.error, result.status);
-  }
-  return NextResponse.json(result.data, { status: 201 });
+  return postCreateRentalCheckout(request);
 }

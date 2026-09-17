@@ -7,10 +7,12 @@ export {
   listRentals,
   rentalIsActive,
   rentalAccessError,
+  rentalEndTransition,
   getRentalForUser,
   resumeRentalCheckout,
   renewRentalCheckout,
   serializeRental,
+  RENTAL_CONFLICT,
 } from "./rentals";
 export {
   getOrCreateOpenSession,

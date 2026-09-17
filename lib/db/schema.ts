@@ -448,6 +448,10 @@ export const agentSessions = pgTable(
   },
   (table) => [
     index("agent_sessions_rental_id_idx").on(table.rentalId),
+    index("agent_sessions_rental_id_status_idx").on(
+      table.rentalId,
+      table.status,
+    ),
     index("agent_sessions_workspace_id_idx").on(table.workspaceId),
     pgPolicy("agent_sessions_select", {
       for: "select",
@@ -497,6 +501,7 @@ export const agentRuns = pgTable(
   },
   (table) => [
     index("agent_runs_session_id_idx").on(table.sessionId),
+    index("agent_runs_session_id_status_idx").on(table.sessionId, table.status),
     index("agent_runs_status_idx").on(table.status),
     pgPolicy("agent_runs_select", {
       for: "select",

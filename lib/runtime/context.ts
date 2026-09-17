@@ -14,7 +14,7 @@ import type { ChatMessage } from "@/lib/unorouter/types";
 import { listConnectorGrants, mergeConnectorStatus } from "./connectors";
 import { connectorCatalog } from "@/lib/connectors";
 import { getOrCreateOpenSession } from "./runs";
-import { rentalAccessError } from "./rentals";
+import { rentalAccessError } from "./rental-status";
 import type { RuntimeContext } from "./types";
 
 function historyFromRuns(
