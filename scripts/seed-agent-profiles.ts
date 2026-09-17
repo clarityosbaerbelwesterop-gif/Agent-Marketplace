@@ -41,6 +41,7 @@ import {
   TIER_CONFIG,
   type CatalogCombo,
 } from "./agent-catalog-spec";
+import { familyFromCategory } from "../lib/catalog/family";
 
 loadEnv({ path: ".env.local" });
 loadEnv();
@@ -64,6 +65,7 @@ function profileRow(combo: CatalogCombo) {
     name: agentNameFor(combo),
     description: agentDescriptionFor(combo),
     category: combo.category.id,
+    family: familyFromCategory(combo.category.id),
     specializations: [combo.spec.id, combo.domain.id],
     languages: languagesFor(combo),
     tier: combo.tier.id,
@@ -209,6 +211,7 @@ async function main() {
             name: sql`excluded.name`,
             description: sql`excluded.description`,
             category: sql`excluded.category`,
+            family: sql`excluded.family`,
             specializations: sql`excluded.specializations`,
             languages: sql`excluded.languages`,
             tier: sql`excluded.tier`,

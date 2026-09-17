@@ -19,6 +19,11 @@ export function AgentMetaBadges({ agent }: { agent: AgentListItem }) {
       <li>
         <Badge tone="outline">{agent.category}</Badge>
       </li>
+      {agent.family ? (
+        <li>
+          <Badge tone="outline">{agent.family}</Badge>
+        </li>
+      ) : null}
       <li>
         <Badge tone="accent">{TIER_LABELS[agent.tier]}</Badge>
       </li>

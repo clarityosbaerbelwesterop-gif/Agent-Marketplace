@@ -39,7 +39,7 @@ export async function writeMemory(input: {
   workspaceId: string;
   sessionId?: string | null;
   kind?: MemoryKind;
-  visibility?: MemoryVisibility;
+  visibility?: MemoryVisibility | "network" | "private";
   content: string;
 }) {
   const content = input.content.trim();
@@ -47,7 +47,10 @@ export async function writeMemory(input: {
     return { ok: false as const, error: "content is required", status: 400 };
   }
   const kind = input.kind ?? "note";
-  const visibility = input.visibility === "workspace" ? "workspace" : "user";
+  const visibility: MemoryVisibility =
+    input.visibility === "workspace" || input.visibility === "network"
+      ? "workspace"
+      : "user";
   const [row] = await withUserRls(input.userId, async (db) => {
     return db
       .insert(memories)
@@ -96,5 +99,10 @@ export function isMemoryKind(value: string): value is MemoryKind {
 }
 
 export function isMemoryVisibility(value: string): value is MemoryVisibility {
-  return value === "user" || value === "workspace";
+  return (
+    value === "user" ||
+    value === "workspace" ||
+    value === "network" ||
+    value === "private"
+  );
 }

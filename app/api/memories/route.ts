@@ -54,7 +54,10 @@ export async function POST(request: Request) {
   const visibilityRaw = String(
     (payload as { visibility?: unknown }).visibility ?? "user",
   );
-  const visibility = visibilityRaw === "workspace" ? "workspace" : "user";
+  const visibility =
+    visibilityRaw === "workspace" || visibilityRaw === "network"
+      ? "workspace"
+      : "user";
   const result = await writeMemory({
     userId: auth.userId,
     workspaceId,

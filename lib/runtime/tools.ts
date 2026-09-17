@@ -8,6 +8,13 @@ import {
   requestConnectorGrant,
 } from "@/lib/connectors";
 import { listMemories, writeMemory } from "./memory";
+import {
+  canPublishVerified,
+  drainSkillLearningQueue,
+  enqueueSkillLearning,
+  listNetworkSummaries,
+  serializeNetworkNode,
+} from "./network";
 import type { RuntimeContext } from "./types";
 
 export function runtimeTools(context: RuntimeContext): ChatTool[] {
@@ -28,7 +35,7 @@ export function runtimeTools(context: RuntimeContext): ChatTool[] {
             },
             visibility: {
               type: "string",
-              enum: ["user", "workspace"],
+              enum: ["user", "workspace", "network", "private"],
             },
           },
           required: ["content"],
@@ -74,6 +81,35 @@ export function runtimeTools(context: RuntimeContext): ChatTool[] {
         },
       },
     },
+    {
+      type: "function",
+      function: {
+        name: "network_search",
+        description:
+          "Read workspace-scoped shared-agent network summaries (not full chat dumps). Workspace members only; never cross-tenant.",
+        parameters: {
+          type: "object",
+          properties: {
+            query: { type: "string" },
+          },
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "network_publish",
+        description:
+          "Queue a short verified learning on the workspace shared network. Higher-tier agents may mark verified. Never publish a full transcript.",
+        parameters: {
+          type: "object",
+          properties: {
+            summary: { type: "string" },
+          },
+          required: ["summary"],
+        },
+      },
+    },
     ...connectorToolsForGrants(context.connectorGrants),
   ];
 
@@ -104,8 +140,11 @@ export async function executeRuntimeTool(
       const kindRaw = String(args.kind ?? "note");
       const kind =
         kindRaw === "fact" || kindRaw === "preference" ? kindRaw : "note";
+      const visibilityRaw = String(args.visibility ?? "user");
       const visibility =
-        String(args.visibility ?? "user") === "workspace" ? "workspace" : "user";
+        visibilityRaw === "workspace" || visibilityRaw === "network"
+          ? "workspace"
+          : "user";
       const result = await writeMemory({
         userId: context.userId,
         workspaceId: context.rental.workspaceId,
@@ -114,6 +153,22 @@ export async function executeRuntimeTool(
         visibility,
         content,
       });
+      if (result.ok && visibilityRaw === "network") {
+        void enqueueSkillLearning({
+          userId: context.userId,
+          workspaceId: context.rental.workspaceId,
+          sessionId: context.session.id,
+          rentalId: context.rental.id,
+          agentProfileId: context.agent.id,
+          publisherTier: context.agent.tier,
+          summary: content,
+        }).then(() =>
+          drainSkillLearningQueue(
+            context.userId,
+            context.rental.workspaceId,
+          ),
+        );
+      }
       return JSON.stringify(result);
     }
     case "memory_search": {
@@ -169,6 +224,50 @@ export async function executeRuntimeTool(
           : [],
       });
       return JSON.stringify(result);
+    }
+    case "network_search": {
+      const query = String(args.query ?? "").toLowerCase();
+      const mesh = await listNetworkSummaries(
+        context.userId,
+        context.rental.workspaceId,
+        20,
+      );
+      const nodes = query
+        ? mesh.nodes.filter(
+            (node) =>
+              node.title.toLowerCase().includes(query) ||
+              node.summary.toLowerCase().includes(query),
+          )
+        : mesh.nodes;
+      return JSON.stringify({
+        workspaceScoped: true,
+        crossTenant: false,
+        items: nodes.map(serializeNetworkNode),
+      });
+    }
+    case "network_publish": {
+      const summary = String(args.summary ?? "").trim();
+      const queued = await enqueueSkillLearning({
+        userId: context.userId,
+        workspaceId: context.rental.workspaceId,
+        sessionId: context.session.id,
+        rentalId: context.rental.id,
+        agentProfileId: context.agent.id,
+        publisherTier: context.agent.tier,
+        summary,
+      });
+      if (queued.queued) {
+        void drainSkillLearningQueue(
+          context.userId,
+          context.rental.workspaceId,
+        );
+      }
+      return JSON.stringify({
+        ...queued,
+        verified: canPublishVerified(context.agent.tier),
+        notice:
+          "Published as a short summary on the workspace mesh. Not a full chat dump. Workspace-scoped only.",
+      });
     }
     default:
       if (isConnectorToolName(name)) {

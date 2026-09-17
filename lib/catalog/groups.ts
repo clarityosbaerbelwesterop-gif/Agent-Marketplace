@@ -36,10 +36,11 @@ export const CATEGORY_GROUP_MEMBERS: Record<
     "devops",
     "QA",
     "security",
+    "data analysis",
   ],
-  marketing: ["marketing"],
+  marketing: ["marketing", "writing", "research"],
   design: ["design"],
-  sales: ["sales"],
+  sales: ["sales", "project management"],
 };
 
 const CATEGORY_TO_GROUP = new Map<string, AgentCategoryGroup>();

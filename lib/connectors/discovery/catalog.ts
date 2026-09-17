@@ -1,7 +1,7 @@
 import type { DiscoveryCandidate, DiscoverySearchResult } from "./types";
 
 /**
- * Discovery is catalog-only. Runtime grants stay limited to the first-wave
+ * Discovery is catalog-only. Runtime grants stay limited to the first-party
  * registry — never mark a discovered row grantable.
  */
 export function catalogOnlyCandidate(

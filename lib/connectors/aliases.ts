@@ -15,12 +15,15 @@ const CATALOG_PROVIDER_ALIASES: Record<string, ConnectorId> = {
   crm: "linkedin",
   issues: "github",
   ads: "meta",
+  meta_ads: "meta",
   search: "google-search",
+  google_search: "google-search",
   higgs: "higgsfield",
+  linkedin: "linkedin",
 };
 
 export function canonicalConnectorId(provider: string): ConnectorId | null {
-  const key = provider.trim().toLowerCase();
-  const aliased = CATALOG_PROVIDER_ALIASES[key] ?? key;
+  const key = provider.trim().toLowerCase().replace(/_/g, "-");
+  const aliased = CATALOG_PROVIDER_ALIASES[key] ?? CATALOG_PROVIDER_ALIASES[provider.trim().toLowerCase()] ?? key;
   return isConnectorId(aliased) ? aliased : null;
 }

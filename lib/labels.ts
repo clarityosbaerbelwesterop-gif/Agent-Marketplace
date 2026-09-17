@@ -21,6 +21,16 @@ export const RATING_LABELS: Record<AgentRatingStatus, string> = {
   verified: "Verifiziert",
 };
 
+export const FAMILY_LABELS: Record<
+  "coding" | "marketing" | "design" | "sales",
+  string
+> = {
+  coding: "Coding",
+  marketing: "Marketing",
+  design: "Design",
+  sales: "Sales",
+};
+
 export const SORT_LABELS = {
   newest: "Neueste",
   name: "Name A–Z",

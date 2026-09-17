@@ -16,6 +16,7 @@ export type RuntimeContext = {
   memories: Array<{ id: string; kind: string; content: string; visibility?: string; createdAt: string }>;
   history: ChatMessage[];
   connectorGrants: PublicConnectorGrant[];
+  extraInstructions?: string;
 };
 
 export type RuntimeEvent =
@@ -48,6 +49,7 @@ export type RuntimeEvent =
       downgradedFromPaid?: boolean;
       agentName?: string;
     }
+  | { type: "continue"; reason: string; count: number }
   | { type: "error"; message: string; code: string };
 
 export type ExecuteTurnInput = {

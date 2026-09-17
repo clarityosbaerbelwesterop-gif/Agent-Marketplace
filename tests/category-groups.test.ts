@@ -16,9 +16,9 @@ describe("first-class category groups", () => {
     assert.equal(categoryGroupFor("marketing"), "marketing");
     assert.equal(categoryGroupFor("design"), "design");
     assert.equal(categoryGroupFor("sales"), "sales");
-    assert.equal(categoryGroupFor("writing"), null);
+    assert.equal(categoryGroupFor("writing"), "marketing");
     assert.ok(categoriesForGroup("coding").includes("QA"));
-    assert.equal(CATEGORY_GROUP_MEMBERS.marketing.length, 1);
+    assert.ok(CATEGORY_GROUP_MEMBERS.marketing.includes("research"));
   });
 
   it("accepts group=coding on the catalog query parser", () => {

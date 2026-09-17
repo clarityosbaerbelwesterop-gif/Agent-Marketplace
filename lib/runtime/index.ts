@@ -3,6 +3,18 @@ export { executeTurn } from "./execute";
 export { executeGroupTurn } from "./group";
 export { listMemories, writeMemory, serializeMemory } from "./memory";
 export {
+  drainSkillLearningQueue,
+  enqueueSkillLearning,
+  listNetworkSummaries,
+} from "./network";
+export {
+  addRoomMember,
+  createRoom,
+  getRoomForUser,
+  listRooms,
+  removeRoomMember,
+} from "./agent-rooms";
+export {
   createRentalCheckout,
   endRental,
   listRentals,

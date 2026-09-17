@@ -1,6 +1,7 @@
 import type { AgentSkill } from "@/lib/db";
 import type { AgentTier } from "@/lib/catalog/constants";
 import { TIER_RUNTIME_POLICY } from "./types";
+import { groundingInstructions, looksUngroundedMetric } from "./grounding";
 
 export function planningInstructions(tier: AgentTier): string {
   const policy = TIER_RUNTIME_POLICY[tier];
@@ -33,17 +34,26 @@ export function buildSystemPrompt(input: {
   agentDescription: string;
   tier: AgentTier;
   skill: AgentSkill | null;
-  memories: Array<{ kind: string; content: string }>;
+  memories: Array<{ kind: string; content: string; id?: string }>;
   connectorSummary?: string;
+  networkSummary?: string;
+  extraInstructions?: string;
 }): string {
   const sections = [
     `You are ${input.agentName}, a rented marketplace agent.`,
     input.agentDescription,
     planningInstructions(input.tier),
+    groundingInstructions(input.tier),
     "First-party connectors include neon, github, slack, vercel, supabase, render, stripe, cursor, higgsfield, linkedin, meta, and google-search. Only use connector tools that were provided. Never invent credentials, resources, or successful API results.",
   ];
   if (input.connectorSummary) {
     sections.push(input.connectorSummary);
+  }
+  if (input.networkSummary) {
+    sections.push(input.networkSummary);
+  }
+  if (input.extraInstructions) {
+    sections.push(input.extraInstructions);
   }
   if (input.skill) {
     sections.push(
@@ -63,7 +73,10 @@ export function buildSystemPrompt(input: {
       "Relevant memories for this user and workspace:",
       input.memories
         .slice(0, 8)
-        .map((memory) => `- (${memory.kind}) ${memory.content}`)
+        .map(
+          (memory) =>
+            `- (${memory.kind}${memory.id ? ` id=${memory.id}` : ""}) ${memory.content}`,
+        )
         .join("\n"),
     );
   }
@@ -75,10 +88,18 @@ export function resultCheckPrompt(outputText: string, skill: AgentSkill): string
   return [
     "Score the assistant draft against the skill checks.",
     "Reply with JSON only: {\"pass\": boolean, \"notes\": string}.",
+    "Fail the draft if it invents benchmarks, success rates, or user counts, or if it states catalog metrics without a [memory:], [tool:], or [file:] citation.",
     "Checks:",
     checks.map((check) => `- ${check.id}: ${check.description}`).join("\n") ||
       "- on-scope: stays on the assigned work",
     "Draft:",
     outputText.slice(0, 8000),
   ].join("\n");
+}
+
+export function groundingCheckNotes(outputText: string): string | null {
+  if (looksUngroundedMetric(outputText)) {
+    return "Draft appears to claim metrics without a tool, memory, or file citation.";
+  }
+  return null;
 }

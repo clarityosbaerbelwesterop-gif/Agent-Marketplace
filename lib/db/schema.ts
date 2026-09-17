@@ -32,6 +32,8 @@ import type {
 import {
   authUserIdEq,
   crudPolicies,
+  isAgentRoomOwner,
+  isAgentRoomVisible,
   isRentalVisible,
   isSessionVisible,
   isWorkspaceMember,
@@ -117,6 +119,37 @@ export const memoryKindEnum = pgEnum("memory_kind", [
 export const memoryVisibilityEnum = pgEnum("memory_visibility", [
   "user",
   "workspace",
+]);
+
+export const skillLearningStatusEnum = pgEnum("skill_learning_status", [
+  "queued",
+  "publishing",
+  "published",
+  "skipped",
+]);
+
+export const networkNodeKindEnum = pgEnum("network_node_kind", [
+  "fact",
+  "skill",
+  "preference",
+  "summary",
+]);
+
+export const networkEdgeKindEnum = pgEnum("network_edge_kind", [
+  "related",
+  "derived_from",
+  "supersedes",
+]);
+
+export const agentRoomStatusEnum = pgEnum("agent_room_status", [
+  "open",
+  "closed",
+]);
+
+export const agentRoomAuthorEnum = pgEnum("agent_room_author", [
+  "user",
+  "agent",
+  "system",
 ]);
 
 export const connectorGrantStatusEnum = pgEnum("connector_grant_status", [
@@ -214,6 +247,7 @@ export const agentProfiles = pgTable(
     name: text("name").notNull(),
     description: text("description").notNull().default(""),
     category: text("category").notNull().default("general"),
+    family: text("family"),
     specializations: text("specializations").array().notNull().default([]),
     languages: text("languages").array().notNull().default([]),
     tier: agentTierEnum("tier").notNull().default("standard"),
@@ -253,6 +287,7 @@ export const agentProfiles = pgTable(
   },
   (table) => [
     index("agent_profiles_category_idx").on(table.category),
+    index("agent_profiles_family_idx").on(table.family),
     index("agent_profiles_tier_idx").on(table.tier),
     ...crudPolicies({
       role: anonymousRole,
@@ -666,6 +701,238 @@ export const connectorGrants = pgTable(
       role: authenticatedRole,
       read: sql`${authUserIdEq(table.userId)} and ${isWorkspaceMember(table.workspaceId)}`,
       modify: sql`${authUserIdEq(table.userId)} and ${isWorkspaceMember(table.workspaceId)}`,
+    }),
+  ],
+).enableRLS();
+
+export const skillLearningEvents = pgTable(
+  "skill_learning_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull(),
+    sourceSessionId: uuid("source_session_id").references(() => agentSessions.id, {
+      onDelete: "set null",
+    }),
+    sourceRentalId: uuid("source_rental_id").references(() => rentals.id, {
+      onDelete: "set null",
+    }),
+    agentProfileId: uuid("agent_profile_id").references(() => agentProfiles.id, {
+      onDelete: "set null",
+    }),
+    publisherTier: agentTierEnum("publisher_tier").notNull().default("standard"),
+    status: skillLearningStatusEnum("status").notNull().default("queued"),
+    summary: text("summary").notNull(),
+    verified: boolean("verified").notNull().default(false),
+    ...timestamps,
+  },
+  (table) => [
+    index("skill_learning_events_workspace_status_idx").on(
+      table.workspaceId,
+      table.status,
+      table.createdAt,
+    ),
+    ...crudPolicies({
+      role: authenticatedRole,
+      read: sql`${isWorkspaceMember(table.workspaceId)}`,
+      modify: sql`${authUserIdEq(table.userId)} and ${isWorkspaceMember(table.workspaceId)}`,
+    }),
+  ],
+).enableRLS();
+
+export const networkNodes = pgTable(
+  "network_nodes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull(),
+    kind: networkNodeKindEnum("kind").notNull().default("summary"),
+    title: text("title").notNull(),
+    summary: text("summary").notNull(),
+    sourceEventId: uuid("source_event_id").references(
+      () => skillLearningEvents.id,
+      { onDelete: "set null" },
+    ),
+    publisherTier: agentTierEnum("publisher_tier").notNull().default("standard"),
+    verified: boolean("verified").notNull().default(false),
+    ...timestamps,
+  },
+  (table) => [
+    unique("network_nodes_workspace_kind_title_uidx").on(
+      table.workspaceId,
+      table.kind,
+      table.title,
+    ),
+    index("network_nodes_workspace_id_idx").on(table.workspaceId),
+    ...crudPolicies({
+      role: authenticatedRole,
+      read: sql`${isWorkspaceMember(table.workspaceId)}`,
+      modify: sql`${authUserIdEq(table.userId)} and ${isWorkspaceMember(table.workspaceId)}`,
+    }),
+  ],
+).enableRLS();
+
+export const networkEdges = pgTable(
+  "network_edges",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    fromNodeId: uuid("from_node_id")
+      .notNull()
+      .references(() => networkNodes.id, { onDelete: "cascade" }),
+    toNodeId: uuid("to_node_id")
+      .notNull()
+      .references(() => networkNodes.id, { onDelete: "cascade" }),
+    kind: networkEdgeKindEnum("kind").notNull().default("related"),
+    ...timestamps,
+  },
+  (table) => [
+    unique("network_edges_from_to_kind_uidx").on(
+      table.fromNodeId,
+      table.toNodeId,
+      table.kind,
+    ),
+    index("network_edges_workspace_id_idx").on(table.workspaceId),
+    ...crudPolicies({
+      role: authenticatedRole,
+      read: sql`${isWorkspaceMember(table.workspaceId)}`,
+      modify: sql`${isWorkspaceMember(table.workspaceId)}`,
+    }),
+  ],
+).enableRLS();
+
+export const agentRooms = pgTable(
+  "agent_rooms",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    ownerUserId: uuid("owner_user_id").notNull(),
+    title: text("title").notNull(),
+    status: agentRoomStatusEnum("status").notNull().default("open"),
+    ...timestamps,
+  },
+  (table) => [
+    index("agent_rooms_owner_user_id_idx").on(table.ownerUserId),
+    index("agent_rooms_workspace_id_idx").on(table.workspaceId),
+    pgPolicy("agent_rooms_select", {
+      for: "select",
+      to: authenticatedRole,
+      using: sql`${authUserIdEq(table.ownerUserId)} or ${isWorkspaceMember(table.workspaceId)}`,
+    }),
+    pgPolicy("agent_rooms_insert", {
+      for: "insert",
+      to: authenticatedRole,
+      withCheck: sql`${authUserIdEq(table.ownerUserId)} and ${isWorkspaceMember(table.workspaceId)}`,
+    }),
+    pgPolicy("agent_rooms_update", {
+      for: "update",
+      to: authenticatedRole,
+      using: authUserIdEq(table.ownerUserId),
+      withCheck: authUserIdEq(table.ownerUserId),
+    }),
+    pgPolicy("agent_rooms_delete", {
+      for: "delete",
+      to: authenticatedRole,
+      using: authUserIdEq(table.ownerUserId),
+    }),
+  ],
+).enableRLS();
+
+export const agentRoomMembers = pgTable(
+  "agent_room_members",
+  {
+    roomId: uuid("room_id")
+      .notNull()
+      .references(() => agentRooms.id, { onDelete: "cascade" }),
+    rentalId: uuid("rental_id")
+      .notNull()
+      .references(() => rentals.id, { onDelete: "cascade" }),
+    sessionId: uuid("session_id").references(() => agentSessions.id, {
+      onDelete: "set null",
+    }),
+    agentProfileId: uuid("agent_profile_id")
+      .notNull()
+      .references(() => agentProfiles.id, { onDelete: "restrict" }),
+    ...timestamps,
+  },
+  (table) => [
+    primaryKey({
+      name: "agent_room_members_pkey",
+      columns: [table.roomId, table.rentalId],
+    }),
+    index("agent_room_members_rental_id_idx").on(table.rentalId),
+    pgPolicy("agent_room_members_select", {
+      for: "select",
+      to: authenticatedRole,
+      using: sql`(select public.is_agent_room_visible(${table.roomId}))`,
+    }),
+    pgPolicy("agent_room_members_insert", {
+      for: "insert",
+      to: authenticatedRole,
+      withCheck: sql`(select public.is_agent_room_owner(${table.roomId}))`,
+    }),
+    pgPolicy("agent_room_members_update", {
+      for: "update",
+      to: authenticatedRole,
+      using: sql`(select public.is_agent_room_owner(${table.roomId}))`,
+      withCheck: sql`(select public.is_agent_room_owner(${table.roomId}))`,
+    }),
+    pgPolicy("agent_room_members_delete", {
+      for: "delete",
+      to: authenticatedRole,
+      using: sql`(select public.is_agent_room_owner(${table.roomId}))`,
+    }),
+  ],
+).enableRLS();
+
+export const agentRoomMessages = pgTable(
+  "agent_room_messages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    roomId: uuid("room_id")
+      .notNull()
+      .references(() => agentRooms.id, { onDelete: "cascade" }),
+    authorKind: agentRoomAuthorEnum("author_kind").notNull(),
+    rentalId: uuid("rental_id").references(() => rentals.id, {
+      onDelete: "set null",
+    }),
+    runId: uuid("run_id").references(() => agentRuns.id, {
+      onDelete: "set null",
+    }),
+    content: text("content").notNull(),
+    status: text("status").notNull().default("complete"),
+    ...timestamps,
+  },
+  (table) => [
+    index("agent_room_messages_room_id_idx").on(table.roomId, table.createdAt),
+    pgPolicy("agent_room_messages_select", {
+      for: "select",
+      to: authenticatedRole,
+      using: sql`(select public.is_agent_room_visible(${table.roomId}))`,
+    }),
+    pgPolicy("agent_room_messages_insert", {
+      for: "insert",
+      to: authenticatedRole,
+      withCheck: sql`(select public.is_agent_room_visible(${table.roomId}))`,
+    }),
+    pgPolicy("agent_room_messages_update", {
+      for: "update",
+      to: authenticatedRole,
+      using: sql`(select public.is_agent_room_visible(${table.roomId}))`,
+      withCheck: sql`(select public.is_agent_room_visible(${table.roomId}))`,
+    }),
+    pgPolicy("agent_room_messages_delete", {
+      for: "delete",
+      to: authenticatedRole,
+      using: sql`(select public.is_agent_room_owner(${table.roomId}))`,
     }),
   ],
 ).enableRLS();
