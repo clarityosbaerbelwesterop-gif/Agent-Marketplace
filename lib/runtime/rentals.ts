@@ -1,7 +1,9 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { getDb, withUserRls } from "@/lib/db";
 import {
   agentProfiles,
+  agentRuns,
+  agentSessions,
   rentalPayments,
   rentals,
   workspaces,
@@ -10,6 +12,7 @@ import type { AgentRentalDuration } from "@/lib/db/json";
 import {
   STRIPE_NOT_CONFIGURED,
   createCheckoutSession,
+  expireOpenCheckoutSession,
   getOpenCheckoutUrl,
   isStripeConfigured,
 } from "@/lib/stripe";
@@ -65,6 +68,26 @@ export function rentalIsActive(rental: {
   return true;
 }
 
+export function rentalAccessError(rental: {
+  status: string;
+  startsAt: Date | null;
+  endsAt: Date | null;
+}): { error: string; status: number } | null {
+  if (rental.status === "canceled") {
+    return { error: "Rental has ended", status: 409 };
+  }
+  if (rental.status === "refunded") {
+    return { error: "Rental was refunded", status: 409 };
+  }
+  if (rental.status === "pending") {
+    return { error: "Rental is pending payment", status: 409 };
+  }
+  if (!rentalIsActive(rental)) {
+    return { error: "Rental is not active or has expired", status: 409 };
+  }
+  return null;
+}
+
 export function serializeRental(
   rental: {
     id: string;
@@ -79,6 +102,9 @@ export function serializeRental(
     usageIncluded: number;
     usageConsumed: number;
     createdAt: Date;
+    endedAt?: Date | null;
+    endedByUserId?: string | null;
+    endReason?: string | null;
   },
   extra: {
     agentSlug?: string;
@@ -102,6 +128,9 @@ export function serializeRental(
     usageIncluded: rental.usageIncluded,
     usageConsumed: rental.usageConsumed,
     createdAt: rental.createdAt.toISOString(),
+    endedAt: rental.endedAt?.toISOString() ?? null,
+    endedByUserId: rental.endedByUserId ?? null,
+    endReason: rental.endReason ?? null,
     active: rentalIsActive(rental),
     billing: "stripe" as const,
     agentSlug: extra.agentSlug,
@@ -494,4 +523,149 @@ export async function renewRentalCheckout(input: {
       error instanceof Error ? error.message : "Stripe Checkout failed";
     return { ok: false as const, error: message, status: 502 };
   }
+}
+
+const ENDABLE_STATUSES = new Set(["pending", "active"]);
+
+export async function endRental(input: {
+  userId: string;
+  rentalId: string;
+  reason?: string;
+}) {
+  const reason = (input.reason?.trim() || "user_ended").slice(0, 120);
+
+  const prepared = await withUserRls(input.userId, async (db) => {
+    const [row] = await db
+      .select({
+        rental: rentals,
+        agent: agentProfiles,
+      })
+      .from(rentals)
+      .innerJoin(agentProfiles, eq(rentals.agentProfileId, agentProfiles.id))
+      .where(and(eq(rentals.id, input.rentalId), eq(rentals.userId, input.userId)))
+      .limit(1);
+
+    if (!row) {
+      return { ok: false as const, error: "Rental not found", status: 404 };
+    }
+    if (row.rental.status === "canceled") {
+      return {
+        ok: false as const,
+        error: "Rental has already ended",
+        status: 409,
+      };
+    }
+    if (!ENDABLE_STATUSES.has(row.rental.status)) {
+      return {
+        ok: false as const,
+        error: `Cannot end a ${row.rental.status} rental`,
+        status: 409,
+      };
+    }
+
+    const now = new Date();
+    const endsAt =
+      row.rental.endsAt && row.rental.endsAt.getTime() < now.getTime()
+        ? row.rental.endsAt
+        : now;
+
+    const [updated] = await db
+      .update(rentals)
+      .set({
+        status: "canceled",
+        endsAt,
+        endedAt: now,
+        endedByUserId: input.userId,
+        endReason: reason,
+      })
+      .where(and(eq(rentals.id, row.rental.id), eq(rentals.userId, input.userId)))
+      .returning();
+
+    const closedSessions = await db
+      .update(agentSessions)
+      .set({ status: "closed", closedAt: now })
+      .where(
+        and(
+          eq(agentSessions.rentalId, row.rental.id),
+          eq(agentSessions.status, "open"),
+        ),
+      )
+      .returning({ id: agentSessions.id });
+
+    const sessionRows = await db
+      .select({ id: agentSessions.id })
+      .from(agentSessions)
+      .where(eq(agentSessions.rentalId, row.rental.id));
+    const sessionIds = sessionRows.map((session) => session.id);
+
+    const canceledRuns =
+      sessionIds.length === 0
+        ? []
+        : await db
+            .update(agentRuns)
+            .set({
+              status: "canceled",
+              finishedAt: now,
+              output: { canceled: true, reason: "rental_ended" },
+            })
+            .where(
+              and(
+                inArray(agentRuns.sessionId, sessionIds),
+                inArray(agentRuns.status, ["queued", "running"]),
+              ),
+            )
+            .returning({ id: agentRuns.id });
+
+    const openPayments = await db
+      .update(rentalPayments)
+      .set({ status: "canceled" })
+      .where(
+        and(
+          eq(rentalPayments.rentalId, row.rental.id),
+          eq(rentalPayments.status, "open"),
+        ),
+      )
+      .returning({ stripeSessionId: rentalPayments.stripeSessionId });
+
+    return {
+      ok: true as const,
+      rental: updated,
+      agentSlug: row.agent.slug,
+      agentName: row.agent.name,
+      agentTier: row.agent.tier,
+      closedSessions: closedSessions.length,
+      canceledRuns: canceledRuns.length,
+      openCheckoutIds: openPayments
+        .map((payment) => payment.stripeSessionId)
+        .filter((id): id is string => Boolean(id)),
+    };
+  });
+
+  if (!prepared.ok) {
+    return prepared;
+  }
+
+  let expiredCheckoutSessions = 0;
+  if (isStripeConfigured()) {
+    const results = await Promise.all(
+      prepared.openCheckoutIds.map((sessionId) =>
+        expireOpenCheckoutSession(sessionId),
+      ),
+    );
+    expiredCheckoutSessions = results.filter(Boolean).length;
+  }
+
+  return {
+    ok: true as const,
+    data: {
+      ...serializeRental(prepared.rental, {
+        agentSlug: prepared.agentSlug,
+        agentName: prepared.agentName,
+        agentTier: prepared.agentTier,
+      }),
+      closedSessions: prepared.closedSessions,
+      canceledRuns: prepared.canceledRuns,
+      expiredCheckoutSessions,
+    },
+  };
 }

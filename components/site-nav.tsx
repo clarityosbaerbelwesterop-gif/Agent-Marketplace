@@ -7,9 +7,11 @@ import { cn } from "@/lib/utils";
 const links = [
   { href: "/", label: "Home" },
   { href: "/marketplace", label: "Marketplace" },
+  { href: "/compare", label: "Compare" },
   { href: "/checkout", label: "Checkout" },
   { href: "/chat", label: "Chat" },
   { href: "/connectors", label: "Connectors" },
+  { href: "/connectors/discover", label: "Discover" },
 ] as const;
 
 type SiteNavProps = {
@@ -24,7 +26,11 @@ export function SiteNav({ signedIn = false }: SiteNavProps) {
       <ul className="flex flex-wrap items-center gap-4 text-sm">
         {links.map(({ href, label }) => {
           const isActive =
-            href === "/" ? pathname === "/" : pathname.startsWith(href);
+            href === "/"
+              ? pathname === "/"
+              : href === "/connectors"
+                ? pathname === "/connectors"
+                : pathname === href || pathname.startsWith(`${href}/`);
 
           return (
             <li key={href}>

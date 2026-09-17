@@ -14,7 +14,7 @@ import type { ChatMessage } from "@/lib/unorouter/types";
 import { listConnectorGrants, mergeConnectorStatus } from "./connectors";
 import { connectorCatalog } from "@/lib/connectors";
 import { getOrCreateOpenSession } from "./runs";
-import { rentalIsActive } from "./rentals";
+import { rentalAccessError } from "./rentals";
 import type { RuntimeContext } from "./types";
 
 function historyFromRuns(
@@ -87,11 +87,12 @@ export async function loadRuntimeContext(input: {
     if (!bundle) {
       return { ok: false as const, error: "Rental not found", status: 404 };
     }
-    if (!rentalIsActive(bundle.rental)) {
+    const blocked = rentalAccessError(bundle.rental);
+    if (blocked) {
       return {
         ok: false as const,
-        error: "Rental is not active or has expired",
-        status: 409,
+        error: blocked.error,
+        status: blocked.status,
       };
     }
     return { ok: true as const, data: bundle, rentalId };

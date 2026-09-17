@@ -93,3 +93,19 @@ export async function getOpenCheckoutUrl(
   }
   return null;
 }
+
+export async function expireOpenCheckoutSession(
+  stripeSessionId: string,
+): Promise<boolean> {
+  try {
+    const stripe = getStripe();
+    const session = await stripe.checkout.sessions.retrieve(stripeSessionId);
+    if (session.status !== "open") {
+      return false;
+    }
+    await stripe.checkout.sessions.expire(stripeSessionId);
+    return true;
+  } catch {
+    return false;
+  }
+}

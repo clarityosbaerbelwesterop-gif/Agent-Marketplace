@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PageShell } from "@/components/page-shell";
 import { ChatClient } from "@/components/chat-client";
+import { EndRentalForm } from "@/components/end-rental-form";
 import { PaymentPendingNotice } from "@/components/payment-pending-notice";
 import { RenewRentalForm } from "@/components/renew-rental-form";
 import { getVerifiedSession } from "@/lib/auth/server";
@@ -119,18 +120,33 @@ export default async function ChatPage({
 
   if (!rentalIsActive(bundle.rental)) {
     const durations = bundle.agent.rentalOptions.durations ?? [];
+    const ended = bundle.rental.status === "canceled";
     return (
       <PageShell
         title="Chat"
-        description="That rental is not active or has expired."
+        description={
+          ended
+            ? "This rental has ended. Chat rejects ended rentals."
+            : "That rental is not active or has expired."
+        }
       >
-        <RenewRentalForm
-          rentalId={rentalId}
-          durations={durations.map((duration) => ({
-            id: duration.id,
-            label: duration.label,
-          }))}
-        />
+        {ended ? (
+          <p className="text-sm text-muted">
+            Ended
+            {bundle.rental.endedAt
+              ? ` at ${bundle.rental.endedAt.toISOString()}`
+              : ""}
+            {bundle.rental.endReason ? ` (${bundle.rental.endReason})` : ""}.
+          </p>
+        ) : (
+          <RenewRentalForm
+            rentalId={rentalId}
+            durations={durations.map((duration) => ({
+              id: duration.id,
+              label: duration.label,
+            }))}
+          />
+        )}
         <Link className="text-sm underline underline-offset-4" href="/chat">
           Choose another rental
         </Link>
@@ -180,6 +196,7 @@ export default async function ChatPage({
           label: duration.label,
         }))}
       />
+      <EndRentalForm rentalId={rentalId} />
     </PageShell>
   );
 }

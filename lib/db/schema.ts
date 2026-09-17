@@ -344,6 +344,9 @@ export const rentals = pgTable(
     stripePaymentIntentId: text("stripe_payment_intent_id"),
     usageIncluded: integer("usage_included").notNull().default(0),
     usageConsumed: integer("usage_consumed").notNull().default(0),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    endedByUserId: uuid("ended_by_user_id"),
+    endReason: text("end_reason"),
     ...timestamps,
   },
   (table) => [

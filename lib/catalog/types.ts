@@ -66,3 +66,28 @@ export type AgentListResponse = {
 export type FavoriteListItem = AgentListItem & {
   favoritedAt: string;
 };
+
+/** Side-by-side catalog fields. No invented benchmarks or scores. */
+export type AgentCompareSkillSummary = {
+  slug: string;
+  version: string;
+  summary: string;
+};
+
+export type AgentCompareItem = {
+  slug: string;
+  name: string;
+  category: string;
+  tier: AgentTier;
+  modelAlias: string | null;
+  ratingStatus: AgentRatingStatus;
+  rentalOptions: AgentRentalOptions;
+  connectors: AgentConnectorSpec[];
+  skills: AgentCompareSkillSummary[];
+};
+
+export type AgentCompareResponse = {
+  items: AgentCompareItem[];
+  missing: string[];
+  requested: string[];
+};
