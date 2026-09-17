@@ -43,6 +43,13 @@
       "when": 1789643857837,
       "tag": "0005_rental_end_lookup_idx",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789647000000,
+      "tag": "0006_shared_memory_group_sessions",
+      "breakpoints": true
     }
   ]
 }

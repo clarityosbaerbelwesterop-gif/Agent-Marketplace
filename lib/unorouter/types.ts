@@ -78,6 +78,7 @@ export type StreamChunk =
   | { type: "text"; text: string }
   | { type: "tool_calls"; toolCalls: ChatToolCall[] }
   | { type: "usage"; usage: ChatUsage }
+  | { type: "model"; modelId: string }
   | { type: "finish"; reason: string };
 
 export type ChatResult = {

@@ -35,7 +35,7 @@ export default async function ConnectorsPage({
     return (
       <PageShell
         title="Konnektoren"
-        description="Melden Sie sich an, um Neon, GitHub, Slack, Vercel, Supabase, Render, Stripe oder Cursor während einer Miete freizugeben."
+        description="Melden Sie sich an, um Neon, GitHub, Slack, Vercel, Supabase, Render, Stripe, Cursor, Higgsfield, LinkedIn, Meta oder Google Search während einer Miete freizugeben. Die neuen Provider sind Grant-Stubs ohne Fake-OAuth."
       >
         <EmptyState
           title="Anmeldung nötig"

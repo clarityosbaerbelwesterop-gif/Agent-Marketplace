@@ -1,6 +1,6 @@
 import { AgentMark } from "@/components/agent/agent-mark";
 import { Badge } from "@/components/ui/badge";
-import { AVAILABILITY_LABELS, TIER_LABELS } from "@/lib/labels";
+import { GROUP_LABELS, AVAILABILITY_LABELS, TIER_LABELS } from "@/lib/labels";
 import {
   agentInitials,
   agentPalette,
@@ -11,6 +11,11 @@ import type { AgentListItem } from "@/lib/catalog/types";
 export function AgentMetaBadges({ agent }: { agent: AgentListItem }) {
   return (
     <ul className="flex flex-wrap gap-2" aria-label="Merkmale">
+      {agent.categoryGroup ? (
+        <li>
+          <Badge tone="outline">{GROUP_LABELS[agent.categoryGroup]}</Badge>
+        </li>
+      ) : null}
       <li>
         <Badge tone="outline">{agent.category}</Badge>
       </li>

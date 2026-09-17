@@ -62,14 +62,16 @@ export default async function MarketplacePage({
     await Promise.all(compare.map((slug) => getAgentBySlug(slug)))
   ).filter((agent): agent is AgentDetail => Boolean(agent));
 
-  const hasFilters = Boolean(parsed.search || parsed.category || parsed.tier);
+  const hasFilters = Boolean(
+    parsed.search || parsed.category || parsed.group || parsed.tier,
+  );
 
   return (
     <PageShell
       width="wide"
       eyebrow="Marktplatz"
       title="Agenten mieten"
-      description="Suche, Filter und Sortierung laufen serverseitig über die Catalog API. Eine Seite, nicht der ganze Bestand."
+      description="Suche, Gruppen (Coding, Marketing, Design, Sales), Filter und Sortierung laufen serverseitig über die Catalog API. Eine Seite, nicht der ganze Bestand."
       actions={
         <ButtonLink href="/compare" variant="secondary">
           Vergleich
@@ -98,7 +100,7 @@ export default async function MarketplacePage({
       {result.items.length === 0 ? (
         <EmptyState
           title="Nichts gefunden"
-          description="Passen Sie Suche, Kategorie oder Stufe an. Der Bestand kommt aus Postgres, nicht aus Fixtures."
+          description="Passen Sie Suche, Gruppe, Kategorie oder Stufe an. Der Bestand kommt aus Postgres, nicht aus Fixtures."
           actionHref="/marketplace"
           actionLabel="Alle Profile"
         />

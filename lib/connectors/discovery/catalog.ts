@@ -2,7 +2,7 @@ import type { DiscoveryCandidate, DiscoverySearchResult } from "./types";
 
 /**
  * Discovery is catalog-only. Runtime grants stay limited to the first-wave
- * eight connectors — never mark a discovered row grantable.
+ * registry — never mark a discovered row grantable.
  */
 export function catalogOnlyCandidate(
   input: Omit<DiscoveryCandidate, "grantable" | "untrusted">,

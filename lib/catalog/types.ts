@@ -13,6 +13,7 @@ export type AgentListItem = {
   name: string;
   description: string;
   category: string;
+  categoryGroup?: "coding" | "marketing" | "design" | "sales" | null;
   specializations: string[];
   languages: string[];
   tier: AgentTier;
@@ -59,6 +60,7 @@ export type AgentListResponse = {
   filters: {
     search: string | null;
     category: string | null;
+    group: "coding" | "marketing" | "design" | "sales" | null;
     tier: string | null;
   };
 };

@@ -56,6 +56,7 @@ export async function getOrCreateOpenSession(input: {
         and(
           eq(agentSessions.rentalId, input.rentalId),
           eq(agentSessions.status, "open"),
+          eq(agentSessions.kind, "solo"),
         ),
       )
       .orderBy(desc(agentSessions.openedAt))
@@ -69,6 +70,7 @@ export async function getOrCreateOpenSession(input: {
       .values({
         rentalId: rental.id,
         workspaceId: rental.workspaceId,
+        kind: "solo",
         status: "open",
       })
       .returning();
@@ -110,6 +112,7 @@ export async function createQueuedRun(input: {
   userId: string;
   sessionId: string;
   modelIdUsed: string;
+  providerUsed?: string | null;
   skillVersion: string | null;
   payload: JsonObject;
 }) {
@@ -120,6 +123,7 @@ export async function createQueuedRun(input: {
         sessionId: input.sessionId,
         status: "queued",
         modelIdUsed: input.modelIdUsed,
+        providerUsed: input.providerUsed ?? null,
         skillVersion: input.skillVersion,
         input: input.payload,
       })
@@ -134,6 +138,7 @@ export async function updateRun(
   patch: {
     status?: "queued" | "running" | "succeeded" | "failed" | "canceled";
     modelIdUsed?: string;
+    providerUsed?: string | null;
     output?: JsonObject | null;
     usage?: ChatUsage | null;
     finished?: boolean;
@@ -146,6 +151,9 @@ export async function updateRun(
     }
     if (patch.modelIdUsed) {
       values.modelIdUsed = patch.modelIdUsed;
+    }
+    if (patch.providerUsed !== undefined) {
+      values.providerUsed = patch.providerUsed;
     }
     if (patch.output !== undefined) {
       values.output = patch.output;
@@ -221,6 +229,27 @@ export async function assertRunStillOpen(userId: string, runId: string) {
   if (row.run.status === "canceled") {
     throw new RunCanceledError();
   }
+  const payload = row.run.input as { rentalId?: unknown } | null;
+  const memberRentalId =
+    payload && typeof payload.rentalId === "string" ? payload.rentalId : null;
+  if (memberRentalId && memberRentalId !== row.rental.id) {
+    const member = await withUserRls(userId, async (db) => {
+      const [found] = await db
+        .select()
+        .from(rentals)
+        .where(eq(rentals.id, memberRentalId))
+        .limit(1);
+      return found ?? null;
+    });
+    if (!member) {
+      throw new RunCanceledError("Rental not found");
+    }
+    const blockedMember = rentalAccessError(member);
+    if (blockedMember) {
+      throw new RunCanceledError(blockedMember.error);
+    }
+    return;
+  }
   const blocked = rentalAccessError(row.rental);
   if (blocked) {
     throw new RunCanceledError(blocked.error);
@@ -233,6 +262,7 @@ export function serializeRun(run: typeof agentRuns.$inferSelect) {
     sessionId: run.sessionId,
     status: run.status,
     modelIdUsed: run.modelIdUsed,
+    providerUsed: run.providerUsed,
     skillVersion: run.skillVersion,
     input: run.input,
     output: run.output,

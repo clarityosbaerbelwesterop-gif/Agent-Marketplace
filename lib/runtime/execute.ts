@@ -1,5 +1,11 @@
-import { chatComplete, chatStream, UnorouterError } from "@/lib/unorouter";
+import { chatComplete as unorouterComplete, chatStream as unorouterStream } from "@/lib/unorouter";
+import { chatComplete as freellmComplete, chatStream as freellmStream } from "@/lib/freellm";
 import type { ChatMessage, ChatToolCall, ChatUsage } from "@/lib/unorouter/types";
+import {
+  isFailoverError,
+  isProviderError,
+  type RouteCandidate,
+} from "@/lib/llm";
 import { buildSystemPrompt, resultCheckPrompt } from "./skills";
 import { createQueuedRun, updateRun, addUsageToRental, claimQueuedRun, assertRunStillOpen, RunCanceledError } from "./runs";
 import { writeMemory } from "./memory";
@@ -26,8 +32,15 @@ function addUsage(left: ChatUsage | null, right: ChatUsage | null): ChatUsage | 
   };
 }
 
+function chatFns(provider: RouteCandidate["provider"]) {
+  if (provider === "freellm") {
+    return { complete: freellmComplete, stream: freellmStream };
+  }
+  return { complete: unorouterComplete, stream: unorouterStream };
+}
+
 async function streamAssistant(input: {
-  modelIds: string[];
+  candidates: RouteCandidate[];
   messages: ChatMessage[];
   tools: ReturnType<typeof runtimeTools>;
   temperature?: number;
@@ -39,16 +52,21 @@ async function streamAssistant(input: {
   usage: ChatUsage | null;
   finishReason: string;
   modelId: string;
+  provider: RouteCandidate["provider"];
+  role: RouteCandidate["role"];
+  downgradedFromPaid: boolean;
 }> {
   let lastError: unknown;
-  for (const model of input.modelIds) {
+  for (const candidate of input.candidates) {
+    const { stream } = chatFns(candidate.provider);
     try {
       let text = "";
       let toolCalls: ChatToolCall[] | undefined;
       let usage: ChatUsage | null = null;
       let finishReason = "stop";
-      for await (const chunk of chatStream({
-        model,
+      let modelId = candidate.modelId;
+      for await (const chunk of stream({
+        model: candidate.modelId,
         messages: input.messages,
         tools: input.tools.length > 0 ? input.tools : undefined,
         temperature: input.temperature,
@@ -62,12 +80,17 @@ async function streamAssistant(input: {
           toolCalls = chunk.toolCalls;
         } else if (chunk.type === "usage") {
           usage = chunk.usage;
+        } else if (chunk.type === "model") {
+          modelId = chunk.modelId || modelId;
         } else if (chunk.type === "finish") {
           finishReason = chunk.reason;
         }
       }
       return {
-        modelId: model,
+        modelId,
+        provider: candidate.provider,
+        role: candidate.role,
+        downgradedFromPaid: candidate.downgradedFromPaid,
         usage,
         finishReason,
         message: {
@@ -78,28 +101,32 @@ async function streamAssistant(input: {
       };
     } catch (error) {
       lastError = error;
-      const canFallback =
-        error instanceof UnorouterError &&
-        (error.code === "not_found" || error.code === "provider_unavailable");
-      if (!canFallback) {
+      if (!isFailoverError(error)) {
         throw error;
       }
     }
   }
-  throw lastError;
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("All model route candidates failed");
 }
 
 async function checkOutput(
   context: RuntimeContext,
-  modelIds: string[],
+  candidates: RouteCandidate[],
   outputText: string,
 ): Promise<{ pass: boolean; notes: string }> {
   if (!context.skill) {
     return { pass: true, notes: "no skill package" };
   }
+  const primary = candidates[0];
+  if (!primary) {
+    return { pass: true, notes: "no model candidate" };
+  }
   try {
-    const result = await chatComplete({
-      model: modelIds[0],
+    const { complete } = chatFns(primary.provider);
+    const result = await complete({
+      model: primary.modelId,
       messages: [
         {
           role: "user",
@@ -124,6 +151,15 @@ async function checkOutput(
   }
 }
 
+function inventedSuccessWithoutTools(outputText: string, toolRoundCount: number): boolean {
+  if (toolRoundCount > 0) {
+    return false;
+  }
+  return /\b(connected|granted|deployed|created resource|API succeeded|benchmark|success rate)\b/i.test(
+    outputText,
+  );
+}
+
 export async function executeTurn(
   context: RuntimeContext,
   userMessage: string,
@@ -139,14 +175,29 @@ export async function executeTurn(
   const skillVersion = context.skill
     ? `${context.skill.slug}@${context.skill.version}`
     : context.agent.skillPackageVersion;
-  const primaryModel = context.modelIds[0];
+  const candidates = context.route.length > 0 ? context.route : context.modelIds.map((modelId) => ({
+    provider: "unorouter" as const,
+    modelId,
+    role: "primary" as const,
+    downgradedFromPaid: false,
+  }));
+  const primary = candidates[0];
+  if (!primary) {
+    throw new Error("No model route candidates");
+  }
 
   const run = await createQueuedRun({
     userId: context.userId,
     sessionId: context.session.id,
-    modelIdUsed: primaryModel,
+    modelIdUsed: primary.modelId,
+    providerUsed: primary.provider,
     skillVersion,
-    payload: { message, background: false },
+    payload: {
+      message,
+      background: false,
+      rentalId: context.rental.id,
+      alias: context.alias,
+    },
   });
 
   await emit({
@@ -154,9 +205,11 @@ export async function executeTurn(
     runId: run.id,
     sessionId: context.session.id,
     rentalId: context.rental.id,
-    modelId: primaryModel,
+    modelId: primary.modelId,
+    provider: primary.provider,
     skillVersion,
     alias: context.alias,
+    downgradedFromPaid: primary.downgradedFromPaid,
   });
 
   const claimed = await claimQueuedRun(context.userId, run.id);
@@ -197,9 +250,13 @@ export async function executeTurn(
   ];
 
   let usage: ChatUsage | null = null;
-  let modelIdUsed = primaryModel;
+  let modelIdUsed = primary.modelId;
+  let providerUsed = primary.provider;
+  let downgradedFromPaid = primary.downgradedFromPaid;
+  let routeRole = primary.role;
   let outputText = "";
   let checkNotes: string | null = null;
+  let toolRoundCount = 0;
 
   try {
     let attempt = 0;
@@ -211,7 +268,7 @@ export async function executeTurn(
       while (rounds < policy.maxToolRounds) {
         await assertRunStillOpen(context.userId, run.id);
         const result = await streamAssistant({
-          modelIds: context.modelIds,
+          candidates,
           messages,
           tools,
           temperature: context.agent.modelConfig?.temperature,
@@ -219,11 +276,14 @@ export async function executeTurn(
           maxOutputTokens: context.agent.modelConfig?.maxOutputTokens,
           onText: async (text) => {
             if (attempt === 0 || outputText.length > 0) {
-              await emit({ type: "delta", text });
+              await emit({ type: "delta", text, agentName: context.agent.name });
             }
           },
         });
         modelIdUsed = result.modelId;
+        providerUsed = result.provider;
+        downgradedFromPaid = result.downgradedFromPaid;
+        routeRole = result.role;
         usage = addUsage(usage, result.usage);
         messages.push(result.message);
 
@@ -233,8 +293,14 @@ export async function executeTurn(
           break;
         }
 
+        toolRoundCount += 1;
         for (const call of toolCalls) {
-          await emit({ type: "tool", name: call.function.name, status: "start" });
+          await emit({
+            type: "tool",
+            name: call.function.name,
+            status: "start",
+            agentName: context.agent.name,
+          });
           let detail = "";
           try {
             detail = await executeRuntimeTool(
@@ -247,6 +313,7 @@ export async function executeTurn(
               name: call.function.name,
               status: "done",
               detail: detail.slice(0, 500),
+              agentName: context.agent.name,
             });
           } catch (error) {
             detail = JSON.stringify({
@@ -257,6 +324,7 @@ export async function executeTurn(
               name: call.function.name,
               status: "error",
               detail,
+              agentName: context.agent.name,
             });
           }
           messages.push({
@@ -268,8 +336,21 @@ export async function executeTurn(
         rounds += 1;
       }
 
+      if (inventedSuccessWithoutTools(outputText, toolRoundCount)) {
+        checkNotes = "Draft claimed connector or API success without a tool result.";
+        if (attempt + 1 < maxAttempts) {
+          messages.push({
+            role: "user",
+            content:
+              "The previous draft claimed a tool or API outcome without calling a tool. Revise using only real tool results. Do not invent metrics.",
+          });
+          attempt += 1;
+          continue;
+        }
+      }
+
       if (policy.checkResults && outputText.trim()) {
-        const checked = await checkOutput(context, context.modelIds, outputText);
+        const checked = await checkOutput(context, candidates, outputText);
         checkNotes = checked.notes;
         if (!checked.pass && attempt + 1 < maxAttempts) {
           messages.push({
@@ -285,12 +366,18 @@ export async function executeTurn(
 
     const output = {
       text: outputText,
+      agentName: context.agent.name,
       checkNotes,
       modelIdUsed,
+      providerUsed,
+      routeRole,
+      downgradedFromPaid,
+      alias: context.alias,
     };
     const finished = await updateRun(context.userId, run.id, {
       status: "succeeded",
       modelIdUsed,
+      providerUsed,
       output,
       usage,
       finished: true,
@@ -306,15 +393,19 @@ export async function executeTurn(
       workspaceId: context.rental.workspaceId,
       sessionId: context.session.id,
       kind: "transcript",
-      content: `User: ${message}\nAssistant: ${outputText.slice(0, 4000)}`,
+      visibility: "workspace",
+      content: `[${context.agent.name}] User: ${message}\nAssistant: ${outputText.slice(0, 4000)}`,
     });
     await emit({
       type: "done",
       usage,
       outputText,
       modelIdUsed,
+      providerUsed,
+      downgradedFromPaid,
+      agentName: context.agent.name,
     });
-    await emit({ type: "status", status: "succeeded" });
+    await emit({ type: "status", status: "succeeded", agentName: context.agent.name });
   } catch (error) {
     if (error instanceof RunCanceledError) {
       await emit({
@@ -325,17 +416,17 @@ export async function executeTurn(
       await emit({ type: "status", status: "canceled" });
       return;
     }
-    const messageText =
-      error instanceof UnorouterError
+    const messageText = isProviderError(error)
+      ? error.message
+      : error instanceof Error
         ? error.message
-        : error instanceof Error
-          ? error.message
-          : "Agent run failed";
-    const code = error instanceof UnorouterError ? error.code : "unknown";
+        : "Agent run failed";
+    const code = isProviderError(error) ? error.code : "unknown";
     await updateRun(context.userId, run.id, {
       status: "failed",
       modelIdUsed,
-      output: { error: messageText, code },
+      providerUsed,
+      output: { error: messageText, code, providerUsed, modelIdUsed },
       usage,
       finished: true,
     });

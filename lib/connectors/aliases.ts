@@ -12,8 +12,11 @@ const CATALOG_PROVIDER_ALIASES: Record<string, ConnectorId> = {
   web: "vercel",
   docs: "github",
   analytics: "stripe",
-  crm: "stripe",
+  crm: "linkedin",
   issues: "github",
+  ads: "meta",
+  search: "google-search",
+  higgs: "higgsfield",
 };
 
 export function canonicalConnectorId(provider: string): ConnectorId | null {

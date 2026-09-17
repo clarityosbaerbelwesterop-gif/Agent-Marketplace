@@ -8,6 +8,7 @@ import {
   rentals,
   workspaces,
 } from "@/lib/db/schema";
+import { pruneGroupMembershipForRental } from "./rooms";
 import type { AgentRentalDuration } from "@/lib/db/json";
 import {
   STRIPE_NOT_CONFIGURED,
@@ -552,18 +553,22 @@ export async function endRental(input: {
         and(
           eq(agentSessions.rentalId, row.rental.id),
           eq(agentSessions.status, "open"),
+          eq(agentSessions.kind, "solo"),
         ),
       )
       .returning({ id: agentSessions.id });
 
-    const sessionRows = await db
-      .select({ id: agentSessions.id })
-      .from(agentSessions)
-      .where(eq(agentSessions.rentalId, row.rental.id));
-    const sessionIds = sessionRows.map((session) => session.id);
+    const pruned = await pruneGroupMembershipForRental(db, row.rental.id, now);
+    closedSessions.push(
+      ...pruned.closedSessionIds.map((id) => ({ id })),
+    );
 
-    const canceledRuns =
-      sessionIds.length === 0
+    const closedSessionIds = [
+      ...new Set(closedSessions.map((session) => session.id)),
+    ];
+
+    const canceledFromClosed =
+      closedSessionIds.length === 0
         ? []
         : await db
             .update(agentRuns)
@@ -574,11 +579,46 @@ export async function endRental(input: {
             })
             .where(
               and(
-                inArray(agentRuns.sessionId, sessionIds),
+                inArray(agentRuns.sessionId, closedSessionIds),
                 inArray(agentRuns.status, ["queued", "running"]),
               ),
             )
             .returning({ id: agentRuns.id });
+
+    let canceledFromOpenGroup: Array<{ id: string }> = [];
+    if (pruned.remainingOpenSessionIds.length > 0) {
+      const openRuns = await db
+        .select({
+          id: agentRuns.id,
+          input: agentRuns.input,
+        })
+        .from(agentRuns)
+        .where(
+          and(
+            inArray(agentRuns.sessionId, pruned.remainingOpenSessionIds),
+            inArray(agentRuns.status, ["queued", "running"]),
+          ),
+        );
+      const ids = openRuns
+        .filter((run) => {
+          const payload = run.input as { rentalId?: unknown } | null;
+          return payload?.rentalId === row.rental.id;
+        })
+        .map((run) => run.id);
+      if (ids.length > 0) {
+        canceledFromOpenGroup = await db
+          .update(agentRuns)
+          .set({
+            status: "canceled",
+            finishedAt: now,
+            output: { canceled: true, reason: "rental_ended" },
+          })
+          .where(inArray(agentRuns.id, ids))
+          .returning({ id: agentRuns.id });
+      }
+    }
+
+    const canceledRuns = [...canceledFromClosed, ...canceledFromOpenGroup];
 
     const openPayments = await db
       .update(rentalPayments)
@@ -597,7 +637,7 @@ export async function endRental(input: {
       agentSlug: row.agent.slug,
       agentName: row.agent.name,
       agentTier: row.agent.tier,
-      closedSessions: closedSessions.length,
+      closedSessions: new Set(closedSessions.map((session) => session.id)).size,
       canceledRuns: canceledRuns.length,
       openCheckoutIds: openPayments
         .map((payment) => payment.stripeSessionId)

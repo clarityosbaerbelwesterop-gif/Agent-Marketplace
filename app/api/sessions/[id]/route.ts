@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { jsonError, requireApiUser } from "@/lib/api/guard";
-import { listSessionRuns, serializeRun } from "@/lib/runtime/runs";
+import { listGroupMembers, listSessionRuns, serializeRun, serializeSession } from "@/lib/runtime";
 import { withUserRls } from "@/lib/db";
 import { agentSessions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -27,16 +27,20 @@ export async function GET(
   if (!session) {
     return jsonError("Session not found", 404);
   }
-  const runs = await listSessionRuns(auth.userId, id);
+  const [runs, members] = await Promise.all([
+    listSessionRuns(auth.userId, id),
+    session.kind === "group" ? listGroupMembers(auth.userId, id) : Promise.resolve([]),
+  ]);
   return NextResponse.json({
-    session: {
-      id: session.id,
-      rentalId: session.rentalId,
-      workspaceId: session.workspaceId,
-      status: session.status,
-      openedAt: session.openedAt.toISOString(),
-      closedAt: session.closedAt?.toISOString() ?? null,
-    },
+    session: serializeSession(session, {
+      members: members.map((member) => ({
+        rentalId: member.rentalId,
+        agentName: member.agentName,
+        agentSlug: member.agentSlug,
+        agentTier: member.agentTier,
+        active: member.active,
+      })),
+    }),
     runs: runs.map(serializeRun),
   });
 }
