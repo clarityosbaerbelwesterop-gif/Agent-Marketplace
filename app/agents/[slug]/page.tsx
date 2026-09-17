@@ -50,7 +50,7 @@ export default async function AgentPage({
   }
 
   const durationId = firstSearchParam(query.duration);
-  const compare = parseMarketplaceCompare(query);
+  const compare = parseCompareSlugs(query);
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6 sm:py-14">
