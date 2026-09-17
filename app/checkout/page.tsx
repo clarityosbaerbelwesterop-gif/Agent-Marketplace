@@ -1,109 +1,148 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { PageShell } from "@/components/page-shell";
+import {
+  CheckoutPayPanel,
+  CheckoutSummary,
+} from "@/components/checkout/checkout-panels";
 import { ResumeCheckoutForm } from "@/components/resume-checkout-form";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ButtonLink } from "@/components/ui/button-link";
+import { PageShell } from "@/components/page-shell";
 import { getVerifiedSession } from "@/lib/auth/server";
-import { isDatabaseConfigured } from "@/lib/catalog/queries";
-import { getRentalForUser, rentalIsActive } from "@/lib/runtime/rentals";
+import { getAgentBySlug, isDatabaseConfigured } from "@/lib/catalog/queries";
 import { CONNECTOR_LIST } from "@/lib/connectors";
+import { getRentalForUser, rentalIsActive } from "@/lib/runtime/rentals";
+import { chatRentalHref } from "@/lib/urls";
+import { firstSearchParam } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Checkout",
+  description:
+    "Preis prüfen und mit Stripe Checkout bezahlen. Aktivierung nur per Webhook.",
 };
 
 export const dynamic = "force-dynamic";
+
+function FirstWaveConnectorsNote() {
+  return (
+    <p className="text-sm text-muted">
+      First-Wave-Konnektoren (Grant-Stubs nach Zahlung, OAuth nicht standardmäßig
+      live): {CONNECTOR_LIST.map((row) => row.displayName).join(", ")}.
+    </p>
+  );
+}
 
 export default async function CheckoutPage({
   searchParams,
 }: PageProps<"/checkout">) {
   const params = await searchParams;
-  const rentalId =
-    typeof params.rentalId === "string" ? params.rentalId : undefined;
+  const rentalId = firstSearchParam(params.rentalId);
+  const slug = firstSearchParam(params.agent);
+  const durationId = firstSearchParam(params.duration);
   const canceled =
     params.canceled === "1" || params.canceled === "true";
   const session = await getVerifiedSession();
-
-  if (!session?.user) {
-    return (
-      <PageShell
-        title="Checkout"
-        description="Sign in to pay for an agent rental with Stripe Checkout."
-      >
-        <Link className="text-sm underline underline-offset-4" href="/login">
-          Sign in
-        </Link>
-      </PageShell>
-    );
-  }
 
   if (!isDatabaseConfigured()) {
     return (
       <PageShell
         title="Checkout"
-        description="Catalog database is not configured on this server."
+        description="Ohne Katalogdatenbank gibt es keine Mietpreise."
       />
     );
   }
 
-  if (!rentalId) {
+  if (rentalId) {
+    if (!session?.user) {
+      return (
+        <PageShell
+          title="Checkout"
+          description="Melden Sie sich an, um Stripe Checkout fortzusetzen."
+        >
+          <EmptyState
+            title="Anmeldung nötig"
+            description="Offene Checkout-Sessions hängen an Ihrer Neon-Auth-Sitzung."
+            actionHref="/login"
+            actionLabel="Anmelden"
+          />
+        </PageShell>
+      );
+    }
+
+    const bundle = await getRentalForUser(session.user.id, rentalId);
+    if (!bundle) {
+      return (
+        <PageShell
+          title="Checkout"
+          description="Diese Miete wurde für dieses Konto nicht gefunden."
+        />
+      );
+    }
+
+    const active = rentalIsActive(bundle.rental);
+
     return (
       <PageShell
-        title="Checkout"
-        description="Choose an agent, then continue to Stripe Checkout. Payment is confirmed by webhook, not by this page."
+        width="wide"
+        eyebrow="Checkout"
+        title="Zahlung"
+        description={
+          canceled
+            ? "Stripe Checkout wurde abgebrochen. Die Miete bleibt ausstehend, bis ein Webhook die Zahlung bestätigt."
+            : active
+              ? "Diese Miete ist aktiv. Öffnen Sie den Chat."
+              : bundle.rental.status === "pending"
+                ? "Zahlung ausstehend. Setzen Sie Stripe Checkout fort. Der Erfolg-Redirect allein aktiviert nichts."
+                : "Diese Miete wartet nicht auf Zahlung."
+        }
       >
         <p className="text-sm">
-          <Link className="underline underline-offset-4" href="/marketplace">
-            Browse the catalog
-          </Link>
+          {bundle.agent.name}
+          <span className="text-muted"> · {bundle.rental.status}</span>
         </p>
-        <p className="text-sm text-muted">
-          First-wave connectors (grant stubs after payment, not live OAuth by
-          default):{" "}
-          {CONNECTOR_LIST.map((row) => row.displayName).join(", ")}.
-        </p>
+        <FirstWaveConnectorsNote />
+        {active ? (
+          <ButtonLink href={chatRentalHref(bundle.rental.id)}>
+            Zum Chat
+          </ButtonLink>
+        ) : bundle.rental.status === "pending" ? (
+          <ResumeCheckoutForm rentalId={bundle.rental.id} />
+        ) : null}
       </PageShell>
     );
   }
 
-  const bundle = await getRentalForUser(session.user.id, rentalId);
-  if (!bundle) {
-    return (
-      <PageShell
-        title="Checkout"
-        description="That rental was not found for this account."
-      />
-    );
-  }
-
-  const active = rentalIsActive(bundle.rental);
+  const agent = slug ? await getAgentBySlug(slug) : undefined;
 
   return (
     <PageShell
-      title="Checkout"
-      description={
-        canceled
-          ? "Stripe Checkout was canceled. The rental is still pending until a webhook confirms payment."
-          : active
-            ? "This rental is active. Open chat to use it."
-            : bundle.rental.status === "pending"
-              ? "This rental is pending payment. Resume Stripe Checkout to finish paying."
-              : "This rental is not awaiting payment."
-      }
+      width="wide"
+      eyebrow="Checkout"
+      title="Miete prüfen"
+      description="Preis liegt offen. Weiter zu Stripe Checkout; die Miete wird erst per Webhook aktiv."
     >
-      <p className="text-sm">
-        {bundle.agent.name}
-        <span className="text-muted"> · {bundle.rental.status}</span>
-      </p>
-      {active ? (
-        <Link
-          className="text-sm underline underline-offset-4"
-          href={`/chat?rentalId=${bundle.rental.id}`}
-        >
-          Open chat
-        </Link>
-      ) : bundle.rental.status === "pending" ? (
-        <ResumeCheckoutForm rentalId={bundle.rental.id} />
-      ) : null}
+      {!agent ? (
+        <div className="flex flex-col gap-4">
+          <EmptyState
+            title="Kein Agent ausgewählt"
+            description="Wählen Sie ein Profil im paginierten Katalog und eine Mietdauer."
+            actionHref="/marketplace"
+            actionLabel="Zum Marktplatz"
+          />
+          <FirstWaveConnectorsNote />
+        </div>
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+          <CheckoutSummary agent={agent} durationId={durationId} />
+          <div className="flex flex-col gap-4">
+            <CheckoutPayPanel
+              agent={agent}
+              durationId={durationId}
+              signedIn={Boolean(session?.user)}
+            />
+            <FirstWaveConnectorsNote />
+          </div>
+        </div>
+      )}
     </PageShell>
   );
 }

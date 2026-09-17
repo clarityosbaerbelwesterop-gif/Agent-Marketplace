@@ -1,6 +1,6 @@
 # Agent Marketplace
 
-Greenfield Next.js (App Router) app for a **rentable AI-agent marketplace**. Neon Auth, a paginated catalog API, a privileged ~10k agent seed, the UNOROUTER adapter, the agent runtime (sessions, runs, streaming chat), and Stripe Checkout + signed webhooks are wired.
+Greenfield Next.js (App Router) app for a **rentable AI-agent marketplace**. Neon Auth, a paginated catalog API, a privileged ~10k agent seed, the UNOROUTER adapter, the agent runtime (sessions, runs, streaming chat), and Stripe Checkout + signed webhooks are wired. The UI layer styles that flow.
 
 ## Stack
 
@@ -71,6 +71,7 @@ app/api/        # auth proxy, catalog, favorites
 components/     # shared UI
 lib/auth/       # Neon Auth server + actions
 lib/catalog/    # paginated catalog queries
+lib/fixtures/   # small UI samples (not the 10k seed)
 lib/unorouter/  # UnoRouter adapter + alias map
 lib/connectors/ # first-party connector registry + grants
 lib/runtime/    # sessions, runs, memories, connector tools
@@ -85,11 +86,11 @@ See `AGENTS.md` for conventions for coding agents.
 
 ## Routes
 
-- `/` — home
-- `/marketplace` — paginated catalog (server-side; never dumps the full list)
-- `/compare` — side-by-side catalog fields (up to 4 slugs)
-- `/agents/[slug]` — agent detail from Postgres
-- `/checkout` → Stripe Checkout resume for a pending rental (`?rentalId=`). Not a fake card form.
+- `/` — landing
+- `/marketplace` — paginated catalog UI (server-side; never dumps the full list)
+- `/agents/[slug]` — agent profile from Postgres
+- `/compare` — side-by-side catalog fields (up to 4 slugs; `GET /api/agents/compare`)
+- `/checkout` — price review and Stripe Checkout resume (`?rentalId=`). Not a fake card form.
 - `/chat` — rental chat (SSE); requires a webhook-activated rental
 - `/connectors` — tenant connector grants for an active rental
 - `/connectors/discover` — catalog-only MCP registry / GitHub topic search

@@ -1,12 +1,28 @@
 export type AgentSlug = string;
 
-export type { AgentDetail, AgentListItem } from "@/lib/catalog/types";
+export type {
+  AgentAvailability,
+  AgentDetail,
+  AgentListItem,
+  AgentListResponse,
+  AgentRatingStatus,
+  AgentTier,
+} from "@/lib/catalog/types";
 
-/**
- * Domain shape for a listable agent. Catalog rows live in `agent_profiles`.
- */
-export type Agent = {
-  slug: AgentSlug;
-  name: string;
-  description: string;
+export { AGENT_CATEGORIES, AGENT_TIERS } from "@/lib/catalog/constants";
+
+export const AGENT_PALETTES = [
+  "ink",
+  "forest",
+  "ochre",
+  "slate",
+  "clay",
+  "sea",
+] as const;
+
+export type AgentPalette = (typeof AGENT_PALETTES)[number];
+
+export type Money = {
+  amountCents: number;
+  currency: string;
 };

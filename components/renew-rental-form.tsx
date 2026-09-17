@@ -1,13 +1,12 @@
 "use client";
 
 import { useActionState } from "react";
+import { Button } from "@/components/ui/button";
+import { Field, Select } from "@/components/ui/field";
 import {
   startRentalRenewal,
   type CheckoutActionState,
 } from "@/lib/runtime/actions";
-
-const buttonClass =
-  "rounded-md border border-border px-3 py-2 text-sm font-medium disabled:opacity-60";
 
 export function RenewRentalForm({
   rentalId,
@@ -25,10 +24,9 @@ export function RenewRentalForm({
     <form action={action} className="flex max-w-xl flex-col gap-3">
       <input type="hidden" name="rentalId" value={rentalId} />
       {durations.length > 0 ? (
-        <label className="text-sm">
-          Renewal duration
-          <select
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+        <Field id="renewal-duration" label="Verlängerung">
+          <Select
+            id="renewal-duration"
             name="durationId"
             defaultValue={durations[0]?.id}
           >
@@ -37,21 +35,21 @@ export function RenewRentalForm({
                 {duration.label}
               </option>
             ))}
-          </select>
-        </label>
+          </Select>
+        </Field>
       ) : null}
       <p className="text-sm text-muted">
-        Renewal extends <code className="font-mono text-xs">ends_at</code> and
-        usage only after Stripe confirms payment.
+        Verlängerung setzt <code className="font-mono text-xs">ends_at</code> und
+        das Kontingent erst nach Stripe-Bestätigung.
       </p>
       {state?.error ? (
-        <p className="text-sm text-red-700" role="alert">
+        <p className="text-sm text-danger" role="alert">
           {state.error}
         </p>
       ) : null}
-      <button className={buttonClass} type="submit" disabled={pending}>
-        {pending ? "Redirecting to Stripe…" : "Renew with Stripe"}
-      </button>
+      <Button type="submit" variant="secondary" disabled={pending}>
+        {pending ? "Weiterleitung zu Stripe…" : "Mit Stripe verlängern"}
+      </Button>
     </form>
   );
 }
