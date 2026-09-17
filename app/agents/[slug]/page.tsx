@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageShell } from "@/components/page-shell";
+import { StartUnpaidAccessForm } from "@/components/start-unpaid-access-form";
+import { getVerifiedSession } from "@/lib/auth/server";
 import { getAgentBySlug, isDatabaseConfigured } from "@/lib/catalog/queries";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +23,7 @@ export async function generateMetadata({
 
 export default async function AgentPage({ params }: AgentPageProps) {
   const { slug } = await params;
+  const session = await getVerifiedSession();
 
   if (!isDatabaseConfigured()) {
     return (
@@ -84,6 +88,22 @@ export default async function AgentPage({ params }: AgentPageProps) {
               </li>
             ))}
           </ul>
+          {session?.user ? (
+            <StartUnpaidAccessForm
+              slug={agent.slug}
+              durations={durations.map((duration) => ({
+                id: duration.id,
+                label: duration.label,
+              }))}
+            />
+          ) : (
+            <p className="text-sm text-muted">
+              <Link className="underline underline-offset-4" href="/login">
+                Sign in
+              </Link>{" "}
+              to start unpaid access (Stripe checkout is not implemented).
+            </p>
+          )}
         </section>
       ) : null}
 
