@@ -7,7 +7,7 @@ import { StartRentalCheckoutForm } from "@/components/start-rental-checkout-form
 import { mergeAgentAndSupportedConnectors } from "@/lib/connectors";
 import { formatMoney } from "@/lib/format";
 import { formatUsage, isUntested, listDurations, pickDuration } from "@/lib/ui/agent-presentation";
-import { TIER_LABELS } from "@/lib/labels";
+import { TIER_LABELS, connectorUiName } from "@/lib/labels";
 import { MAX_COMPARE_SLUGS } from "@/lib/catalog/constants";
 import { agentHref, checkoutHref, compareHref, marketplaceHref } from "@/lib/urls";
 import type { AgentDetail } from "@/lib/catalog/types";
@@ -104,14 +104,14 @@ export function AgentProfile({
           <div className="flex flex-col gap-3">
             <h2 className="font-display text-2xl tracking-tight">Konnektoren</h2>
             <p className="text-sm text-muted">
-              First-Wave-Grants während einer Miete: Neon, GitHub, Slack, Vercel,
-              Supabase, Render, Stripe, Cursor. OAuth/API-Keys sind Tenant-Grants —
-              nicht Marketplace-Checkout und nicht live, bis konfiguriert.
+              First-Wave-Freigaben während einer Miete. OAuth und API-Keys sind
+              Tenant-Grants — nicht der Marktplatz-Checkout und nicht live, bis
+              konfiguriert.
             </p>
             <ul className="flex list-disc flex-col gap-2 pl-5 text-sm leading-relaxed">
               {connectors.map((connector) => (
                 <li key={connector.provider}>
-                  {connector.provider}
+                  {connectorUiName(connector.provider, connector.provider)}
                   {connector.required ? " (erforderlich)" : ""}
                   {connector.scopes?.length
                     ? ` · ${connector.scopes.join(", ")}`
@@ -137,7 +137,8 @@ export function AgentProfile({
               <span className="font-medium text-foreground">
                 {agent.modelAlias ?? agent.tier}
               </span>
-              . Routing über UNOROUTER, keine frei erfundenen Modell-IDs in der UI.
+              . Routing über den Modell-Router, keine frei erfundenen Modell-IDs
+              in der UI.
             </p>
           </div>
         </section>
@@ -149,8 +150,8 @@ export function AgentProfile({
             <CardTitle>Miete</CardTitle>
             <p className="text-sm text-muted">
               {unpaidAccess
-                ? "Preis und inkludiertes Kontingent aus `rental_options`. Testmodus: sofort aktive Miete ohne Stripe und ohne Kartenformular."
-                : "Preis und inkludiertes Kontingent aus `rental_options`. Zahlung über Stripe Checkout; Aktivierung nur per Webhook."}
+                ? "Preis und inkludiertes Kontingent aus `rental_options`. Testmodus: sofort aktive Miete ohne Zahlung und ohne Kartenformular."
+                : "Preis und inkludiertes Kontingent aus `rental_options`. Zahlung über gehosteten Checkout; Aktivierung erst nach Zahlungsbestätigung."}
             </p>
           </CardHeader>
           <DurationOptions
@@ -192,7 +193,7 @@ export function AgentProfile({
               <ButtonLink href="/login" variant="ghost" size="sm">
                 Anmelden
               </ButtonLink>{" "}
-              {unpaidAccess ? "für eine Testmiete." : "für Stripe Checkout."}
+              {unpaidAccess ? "für eine Testmiete." : "um zu bezahlen."}
             </p>
           )}
           <div className="flex flex-col gap-2 text-sm">

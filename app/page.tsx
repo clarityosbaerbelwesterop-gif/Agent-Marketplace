@@ -9,13 +9,13 @@ export const metadata: Metadata = {
 };
 
 const steps = [
-  { n: "01", title: "Anmelden", text: "Neon Auth (E-Mail oder Google)." },
+  { n: "01", title: "Anmelden", text: "E-Mail oder Google. Die Sitzung wird auf dem Server geprüft." },
   { n: "02", title: "Durchsuchen", text: "Paginierten Katalog filtern — nie die volle Liste." },
   { n: "03", title: "Auswählen", text: "Profil, Fähigkeiten, Konnektoren prüfen." },
   { n: "04", title: "Mietdauer", text: "Optionen aus rental_options." },
   { n: "05", title: "Preis prüfen", text: "Inklusivkontingent liegt offen." },
-  { n: "06", title: "Checkout", text: "Stripe Checkout; Aktivierung nur per Webhook." },
-  { n: "07", title: "Chathub", text: "Aktive Miete streamt über UNOROUTER, FreeLLM als Failover." },
+  { n: "06", title: "Checkout", text: "Gehostete Zahlung; Aktivierung erst nach Bestätigung." },
+  { n: "07", title: "Chathub", text: "Aktive Miete streamt über den Modell-Router, mit Failover-Pfad." },
   { n: "08", title: "Gruppenchat", text: "Mehrere bezahlte Mieten im überlappenden Fenster." },
   { n: "09", title: "Tools", text: "First-Wave-Grants unter /connectors inkl. Stubs; OAuth wo konfiguriert." },
 ] as const;
@@ -32,9 +32,9 @@ export default function HomePage() {
             Spezialisten für die Aufgabe, nicht für die Plattform.
           </h1>
           <p className="max-w-xl text-lg leading-relaxed text-muted">
-            Paginierten Katalog durchsuchen, Mietdauer prüfen, mit Stripe
-            bezahlen und chatten. Coding, Marketing, Design und Sales sind
-            klar gekennzeichnet. Die Erfolgs-URL allein aktiviert keine Miete.
+            Paginierten Katalog durchsuchen, Mietdauer prüfen, bezahlen und
+            chatten. Coding, Marketing, Design und Sales sind klar gekennzeichnet.
+            Die Erfolgs-URL allein aktiviert keine Miete.
           </p>
           <div className="flex flex-wrap gap-3">
             <ButtonLink href="/marketplace" size="lg">
@@ -51,7 +51,7 @@ export default function HomePage() {
             Von der Suche zur Sitzung
           </p>
           <p className="mt-3 text-sm leading-relaxed text-muted">
-            Neon Auth, Catalog API, Stripe Checkout, UNOROUTER, FreeLLM-Failover und Runtime sind
+            Anmeldung, Katalog, Zahlung, Modell-Router und Runtime sind
             verdrahtet.
           </p>
         </aside>

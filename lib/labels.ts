@@ -69,3 +69,25 @@ export const GROUP_LABELS: Record<AgentCategoryGroup, string> = {
 export function categoryLabel(category: string): string {
   return CATEGORY_LABELS[category as AgentCategory] ?? category;
 }
+
+/** German UI names for first-party connectors whose registry ids are vendor brands. */
+const CONNECTOR_UI_NAMES: Record<string, string> = {
+  neon: "Datenbank",
+  vercel: "Hosting",
+  stripe: "Mandanten-Zahlung",
+};
+
+const CONNECTOR_UI_DESCRIPTIONS: Record<string, string> = {
+  neon: "Postgres-Datenbank und zugehörige APIs für diesen Miet-Workspace.",
+  vercel: "Deployments und Projekte für diese Miete.",
+  stripe:
+    "Mandanten-Zahlungs-API für den gemieteten Agenten — nicht der Marktplatz-Checkout.",
+};
+
+export function connectorUiName(id: string, fallback: string): string {
+  return CONNECTOR_UI_NAMES[id] ?? fallback;
+}
+
+export function connectorUiDescription(id: string, fallback: string): string {
+  return CONNECTOR_UI_DESCRIPTIONS[id] ?? fallback;
+}

@@ -70,7 +70,7 @@ export function ChatComposer({
           {hint ??
             (onSend
               ? "Stream bleibt sichtbar, damit der Chat nicht hängt."
-              : "Kein Modellaufruf. UNOROUTER ist in dieser Schicht nicht verbunden.")}
+              : "Kein Modellaufruf. Der Modell-Router ist in dieser Schicht nicht verbunden.")}
         </p>
         <Button type="submit" disabled={locked || !value.trim()}>
           {busy ? busyLabel : submitLabel}

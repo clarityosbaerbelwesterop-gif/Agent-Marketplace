@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { LegalLinks } from "@/components/legal-links";
 import {
   signInWithEmail,
   signInWithGoogle,
@@ -40,9 +41,9 @@ export function LoginForms() {
   return (
     <div className="grid gap-10 md:grid-cols-2">
       <form action={signInAction} className="flex flex-col gap-4">
-        <h2 className="text-lg font-medium">Sign in</h2>
+        <h2 className="text-lg font-medium">Anmelden</h2>
         <label className={labelClass}>
-          Email
+          E-Mail
           <input
             className={fieldClass}
             type="email"
@@ -52,7 +53,7 @@ export function LoginForms() {
           />
         </label>
         <label className={labelClass}>
-          Password
+          Passwort
           <input
             className={fieldClass}
             type="password"
@@ -68,12 +69,12 @@ export function LoginForms() {
           type="submit"
           disabled={signInPending}
         >
-          {signInPending ? "Signing in…" : "Sign in"}
+          {signInPending ? "Anmeldung…" : "Anmelden"}
         </button>
       </form>
 
       <form action={signUpAction} className="flex flex-col gap-4">
-        <h2 className="text-lg font-medium">Create account</h2>
+        <h2 className="text-lg font-medium">Konto anlegen</h2>
         <label className={labelClass}>
           Name
           <input
@@ -85,7 +86,7 @@ export function LoginForms() {
           />
         </label>
         <label className={labelClass}>
-          Email
+          E-Mail
           <input
             className={fieldClass}
             type="email"
@@ -95,7 +96,7 @@ export function LoginForms() {
           />
         </label>
         <label className={labelClass}>
-          Password
+          Passwort
           <input
             className={fieldClass}
             type="password"
@@ -111,7 +112,7 @@ export function LoginForms() {
           type="submit"
           disabled={signUpPending}
         >
-          {signUpPending ? "Creating account…" : "Create account"}
+          {signUpPending ? "Konto wird angelegt…" : "Konto anlegen"}
         </button>
       </form>
 
@@ -122,9 +123,14 @@ export function LoginForms() {
           type="submit"
           disabled={googlePending}
         >
-          {googlePending ? "Redirecting…" : "Continue with Google"}
+          {googlePending ? "Weiterleitung…" : "Mit Google fortfahren"}
         </button>
       </form>
+
+      <LegalLinks
+        className="md:col-span-2"
+        prefix="Mit Anmeldung oder Kontoanlage gelten"
+      />
     </div>
   );
 }

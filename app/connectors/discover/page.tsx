@@ -9,7 +9,7 @@ import { UPCOMING_CONNECTOR_LIST } from "@/lib/connectors";
 export const metadata: Metadata = {
   title: "MCP entdecken",
   description:
-    "Catalog-only Suche in der offiziellen MCP-Registry und GitHub-Topics. Nichts wird installiert oder gewährt.",
+    "Nur Katalogsuche in öffentlichen MCP-Verzeichnissen. Es wird nichts installiert oder freigegeben.",
 };
 
 export default function ConnectorDiscoverPage() {
@@ -17,7 +17,7 @@ export default function ConnectorDiscoverPage() {
     <PageShell
       eyebrow="Konnektoren"
       title="MCP entdecken"
-      description="Nur Katalogsuche. Runtime-Konnektoren bleiben die First-Party-Registry inklusive Higgsfield, LinkedIn, Meta und Google Search (Stubs, kein Fake-OAuth). Nichts hier ist grantable."
+      description="Öffentliche Katalogsuche. Treffer sind untrusted Metadaten und nicht verbindbar. Runtime-Freigaben bleiben die First-Party-Konnektoren einer aktiven Miete."
       actions={
         <ButtonLink href="/connectors" variant="secondary">
           Grants
@@ -27,7 +27,7 @@ export default function ConnectorDiscoverPage() {
       <ul className="flex list-disc flex-col gap-2 pl-5 text-sm leading-relaxed text-muted">
         {DISCOVERY_SOURCES.map((source) => (
           <li key={source.id}>
-            {source.name} — {source.notes}{" "}
+            {source.publicName} — {source.publicNotes}{" "}
             <a
               className="underline underline-offset-4"
               href={source.docs}

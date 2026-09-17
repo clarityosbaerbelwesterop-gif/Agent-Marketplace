@@ -37,7 +37,7 @@ export default async function GroupChatPage({
       >
         <EmptyState
           title="Anmeldung nötig"
-          description="Gruppenchat hängt an einer verifizierten Neon-Auth-Sitzung."
+          description="Gruppenchat hängt an einer verifizierten Sitzung."
           actionHref="/login"
           actionLabel="Anmelden"
         />
@@ -80,7 +80,7 @@ export default async function GroupChatPage({
       {candidates.length < 2 ? (
         <EmptyState
           title="Zu wenige aktive Mieten"
-          description="Gruppenchat braucht mindestens zwei per Stripe-Webhook aktivierte Mieten in Coding, Marketing, Design oder Sales. Ausstehende Checkouts zählen nicht."
+          description="Gruppenchat braucht mindestens zwei per Zahlungsbestätigung aktivierte Mieten in Coding, Marketing, Design oder Sales. Ausstehende Checkouts zählen nicht."
           actionHref="/marketplace"
           actionLabel="Marktplatz öffnen"
         />

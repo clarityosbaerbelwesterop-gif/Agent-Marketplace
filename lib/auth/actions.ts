@@ -13,8 +13,7 @@ function readString(formData: FormData, key: string): string {
 function requireAuthConfigured(): AuthFormState {
   if (!isNeonAuthConfigured()) {
     return {
-      error:
-        "Neon Auth is not configured on the server (NEON_AUTH_BASE_URL / NEON_AUTH_COOKIE_SECRET).",
+      error: "Anmeldung ist auf diesem Server nicht eingerichtet.",
     };
   }
   return null;
@@ -32,12 +31,12 @@ export async function signInWithEmail(
   const email = readString(formData, "email");
   const password = readString(formData, "password");
   if (!email || !password) {
-    return { error: "Email and password are required." };
+    return { error: "E-Mail und Passwort sind erforderlich." };
   }
 
   const { error } = await getAuth().signIn.email({ email, password });
   if (error) {
-    return { error: error.message || "Failed to sign in." };
+    return { error: error.message || "Anmeldung fehlgeschlagen." };
   }
 
   redirect("/marketplace");
@@ -56,15 +55,15 @@ export async function signUpWithEmail(
   const email = readString(formData, "email");
   const password = readString(formData, "password");
   if (!name || !email || !password) {
-    return { error: "Name, email, and password are required." };
+    return { error: "Name, E-Mail und Passwort sind erforderlich." };
   }
   if (password.length < 8) {
-    return { error: "Password must be at least 8 characters." };
+    return { error: "Das Passwort muss mindestens 8 Zeichen haben." };
   }
 
   const { error } = await getAuth().signUp.email({ name, email, password });
   if (error) {
-    return { error: error.message || "Failed to create account." };
+    return { error: error.message || "Konto konnte nicht angelegt werden." };
   }
 
   redirect("/marketplace");
@@ -87,7 +86,7 @@ export async function signInWithGoogle(
   });
 
   if (error) {
-    return { error: error.message || "Google sign-in failed." };
+    return { error: error.message || "Google-Anmeldung fehlgeschlagen." };
   }
 
   const url =
@@ -96,7 +95,7 @@ export async function signInWithGoogle(
       : "";
 
   if (!url) {
-    return { error: "Google sign-in did not return a redirect URL." };
+    return { error: "Google-Anmeldung hat keine Weiterleitung geliefert." };
   }
 
   redirect(url);

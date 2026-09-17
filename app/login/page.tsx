@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { LegalLinks } from "@/components/legal-links";
 import { LoginForms } from "@/components/login-forms";
 import { PageShell } from "@/components/page-shell";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,7 @@ import { getVerifiedSession, isNeonAuthConfigured } from "@/lib/auth/server";
 
 export const metadata: Metadata = {
   title: "Anmelden",
-  description: "Neon Auth (Managed Better Auth). Kein zweites Auth-System.",
+  description: "Konto anlegen oder anmelden. Die Sitzung wird auf dem Server geprüft.",
 };
 
 export const dynamic = "force-dynamic";
@@ -23,7 +24,7 @@ export default async function LoginPage() {
         width="narrow"
         eyebrow="Konto"
         title="Angemeldet"
-        description="Sitzung serverseitig gegen Neon Auth geprüft."
+        description="Ihre Sitzung ist serverseitig geprüft."
       >
         <Card className="flex flex-col gap-5">
           <dl className="grid gap-2 text-sm">
@@ -42,6 +43,7 @@ export default async function LoginPage() {
             </Button>
           </form>
         </Card>
+        <LegalLinks prefix="Rechtliches:" />
       </PageShell>
     );
   }
@@ -53,27 +55,26 @@ export default async function LoginPage() {
       title="Anmelden"
       description={
         configured
-          ? "E-Mail/Passwort oder Google über Neon Auth. Sessions werden auf dem Server geprüft."
-          : "Neon-Auth-Umgebungsvariablen fehlen — Anmeldung kann hier nicht laufen."
+          ? "E-Mail und Passwort oder Google. Die Sitzung wird auf dem Server geprüft."
+          : "Anmeldung ist auf diesem Server nicht eingerichtet."
       }
     >
       {configured ? (
         <Card className="flex flex-col gap-6">
           <CardHeader>
-            <CardTitle>Neon Auth</CardTitle>
+            <CardTitle>Anmeldung</CardTitle>
             <p className="text-sm text-muted">
-              Kein zweites Auth-System. Kein lokales Passwort-Konto außerhalb von
-              Neon Auth.
+              Ein Konto, eine Sitzung. Kein zweites Anmeldesystem.
             </p>
           </CardHeader>
           <LoginForms />
         </Card>
       ) : (
         <p className="text-sm text-muted">
-          Setzen Sie <code className="font-mono">NEON_AUTH_BASE_URL</code> und{" "}
-          <code className="font-mono">NEON_AUTH_COOKIE_SECRET</code>.
+          Die Anmelde-Umgebung fehlt. Bitte später erneut versuchen.
         </p>
       )}
+      <LegalLinks prefix="Mit der Nutzung gelten" />
     </PageShell>
   );
 }

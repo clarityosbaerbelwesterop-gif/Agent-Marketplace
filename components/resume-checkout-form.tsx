@@ -22,7 +22,7 @@ export function ResumeCheckoutForm({ rentalId }: { rentalId: string }) {
         </p>
       ) : null}
       <Button type="submit" disabled={pending}>
-        {pending ? "Weiterleitung zu Stripe…" : "Stripe Checkout fortsetzen"}
+        {pending ? "Weiterleitung zur Zahlung…" : "Zahlung fortsetzen"}
       </Button>
     </form>
   );

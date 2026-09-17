@@ -55,7 +55,7 @@ export default async function RoomsPage() {
       {active.length < 2 ? (
         <EmptyState
           title="Zu wenige aktive Mieten"
-          description="Mieten Sie mindestens zwei Agenten (Stripe Checkout, Webhook muss aktivieren)."
+          description="Mieten Sie mindestens zwei Agenten (Zahlung muss bestätigt sein)."
           actionHref="/marketplace"
           actionLabel="Marktplatz"
         />

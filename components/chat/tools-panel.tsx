@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { connectorUiName } from "@/lib/labels";
 
 export function ToolsPanel({ connectors }: { connectors: string[] }) {
   return (
@@ -19,7 +20,9 @@ export function ToolsPanel({ connectors }: { connectors: string[] }) {
             className="flex flex-col gap-2 rounded-md border border-border bg-surface p-3"
           >
             <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-medium">{id}</p>
+              <p className="text-sm font-medium">
+                {connectorUiName(id, id)}
+              </p>
               <Badge tone="muted">Getrennt</Badge>
             </div>
             <Button type="button" size="sm" variant="secondary" disabled>

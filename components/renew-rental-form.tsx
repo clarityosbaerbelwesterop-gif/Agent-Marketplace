@@ -40,7 +40,7 @@ export function RenewRentalForm({
       ) : null}
       <p className="text-sm text-muted">
         Verlängerung setzt <code className="font-mono text-xs">ends_at</code> und
-        das Kontingent erst nach Stripe-Bestätigung.
+        das Kontingent erst nach Zahlungsbestätigung.
       </p>
       {state?.error ? (
         <p className="text-sm text-danger" role="alert">
@@ -48,7 +48,7 @@ export function RenewRentalForm({
         </p>
       ) : null}
       <Button type="submit" variant="secondary" disabled={pending}>
-        {pending ? "Weiterleitung zu Stripe…" : "Mit Stripe verlängern"}
+        {pending ? "Weiterleitung zur Zahlung…" : "Miete verlängern"}
       </Button>
     </form>
   );

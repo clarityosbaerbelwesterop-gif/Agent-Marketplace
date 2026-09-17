@@ -17,8 +17,8 @@ export function UpcomingConnectorPanel({
       <div className="flex flex-col gap-2">
         <h2 className="font-display text-2xl tracking-tight">Nächste Welle</h2>
         <p className="text-sm text-muted">
-          Higgsfield, LinkedIn, Meta Ads und Google Search sind Grant-/OAuth-Shells.
-          Es gibt keine Fake-Authorize-URLs und keine stillen Erfolgs-Grants.
+          Weitere Konnektoren folgen als Freigabe-Hülsen. Es gibt keine
+          Fake-Authorize-URLs und keine stillen Erfolgs-Grants.
         </p>
       </div>
       <ul className="grid gap-3 md:grid-cols-2">

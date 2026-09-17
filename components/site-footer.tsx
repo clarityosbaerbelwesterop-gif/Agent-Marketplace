@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LEGAL_LINKS } from "@/lib/legal";
 
 const groups = [
   {
@@ -19,18 +20,22 @@ const groups = [
       { href: "/checkout", label: "Checkout" },
     ],
   },
+  {
+    title: "Rechtliches",
+    links: LEGAL_LINKS.map((link) => ({ href: link.href, label: link.label })),
+  },
 ] as const;
 
 export function SiteFooter() {
   return (
     <footer className="mt-auto border-t border-border bg-surface">
-      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.4fr_1fr_1fr]">
+      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
         <div className="flex max-w-sm flex-col gap-3">
           <p className="font-display text-xl">Atelier</p>
           <p className="text-sm leading-relaxed text-muted">
             Mieten Sie spezialisierte Agenten für eine klar umrissene Aufgabe.
-            Neon Auth, Stripe Checkout, Catalog API und Runtime sind verdrahtet.
-            Fixtures sind nur Designproben, nicht der Katalog.
+            Katalog, Anmeldung, Zahlung und Chat sind verdrahtet. Fixtures sind
+            nur Designproben, nicht der Katalog.
           </p>
         </div>
         {groups.map((group) => (
@@ -54,9 +59,17 @@ export function SiteFooter() {
         ))}
       </div>
       <div className="border-t border-border">
-        <p className="mx-auto max-w-6xl px-4 py-4 text-xs text-muted sm:px-6">
-          Neon Auth, Stripe Checkout und die Agenten-Runtime sind verdrahtet. Der
-          Marktplatz liest Postgres, nicht UI-Fixtures.
+        <p className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-4 text-xs text-muted sm:px-6">
+          <span>Klarheit OS · Agent Marketplace. Der Katalog kommt aus der Datenbank, nicht aus UI-Fixtures.</span>
+          {LEGAL_LINKS.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="underline-offset-4 hover:underline"
+            >
+              {link.label}
+            </Link>
+          ))}
         </p>
       </div>
     </footer>

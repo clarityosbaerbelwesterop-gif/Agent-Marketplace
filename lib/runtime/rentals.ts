@@ -370,7 +370,7 @@ export async function createRentalCheckout(input: {
     };
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Stripe Checkout failed";
+      error instanceof Error ? error.message : "Zahlung konnte nicht gestartet werden.";
     return { ok: false as const, error: message, status: 502 };
   }
 }
@@ -451,7 +451,7 @@ export async function resumeRentalCheckout(input: {
     };
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Stripe Checkout failed";
+      error instanceof Error ? error.message : "Zahlung konnte nicht gestartet werden.";
     return { ok: false as const, error: message, status: 502 };
   }
 }
@@ -544,7 +544,7 @@ export async function renewRentalCheckout(input: {
     };
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Stripe Checkout failed";
+      error instanceof Error ? error.message : "Zahlung konnte nicht gestartet werden.";
     return { ok: false as const, error: message, status: 502 };
   }
 }
