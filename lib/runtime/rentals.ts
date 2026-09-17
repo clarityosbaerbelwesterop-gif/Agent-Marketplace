@@ -21,6 +21,7 @@ import {
 } from "@/lib/stripe";
 import { getVerifiedSession } from "@/lib/auth/server";
 import { rentalEndTransition, rentalIsActive } from "./rental-status";
+import { chatRentalHref } from "@/lib/urls";
 import {
   UNPAID_TEST_BILLING,
   UNPAID_TEST_NOTICE,
@@ -95,12 +96,14 @@ export function serializeRental(
     agentCategory?: string;
     agentAccentColor?: string | null;
     checkoutUrl?: string | null;
+    chatUrl?: string | null;
     stripeSessionId?: string | null;
     billing?: RentalBilling;
     notice?: string;
   } = {},
 ) {
   const stripeSessionId = extra.stripeSessionId ?? rental.stripeSessionId;
+  const active = rentalIsActive(rental);
   return {
     id: rental.id,
     userId: rental.userId,
@@ -117,7 +120,7 @@ export function serializeRental(
     endedAt: rental.endedAt?.toISOString() ?? null,
     endedByUserId: rental.endedByUserId ?? null,
     endReason: rental.endReason ?? null,
-    active: rentalIsActive(rental),
+    active,
     billing:
       extra.billing ??
       inferRentalBilling({
@@ -131,6 +134,7 @@ export function serializeRental(
     agentCategory: extra.agentCategory,
     agentAccentColor: extra.agentAccentColor,
     checkoutUrl: extra.checkoutUrl,
+    chatUrl: extra.chatUrl ?? (active ? chatRentalHref(rental.id) : undefined),
     notice: extra.notice,
   };
 }

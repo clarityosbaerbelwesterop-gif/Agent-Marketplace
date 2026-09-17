@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STRIPE_NOT_CONFIGURED } from "../lib/stripe/config";
-import { rentalIsActive } from "../lib/runtime/rental-status";
+import { rentalAccessError, rentalIsActive } from "../lib/runtime/rental-status";
 import {
   STRIPE_BILLING,
   UNPAID_TEST_BILLING,
   inferRentalBilling,
   isUnpaidAccessAllowed,
+  rentalCreateRedirectUrl,
   resolveRentalCreateMode,
 } from "../lib/runtime/unpaid-access";
 
@@ -100,6 +101,50 @@ describe("unpaid_test active rentals are usable like paid active", () => {
         endsAt: new Date(Date.now() + 60_000),
       }),
       true,
+    );
+  });
+
+  it("does not 409 chat/session/connector access for an unpaid_test-shaped window", () => {
+    const snapshot = {
+      status: "active",
+      startsAt: new Date(Date.now() - 60_000),
+      endsAt: new Date(Date.now() + 3_600_000),
+    };
+    assert.equal(rentalAccessError(snapshot), null);
+    assert.equal(rentalIsActive(snapshot), true);
+  });
+
+  it("still blocks pending Stripe checkouts (not unpaid_test)", () => {
+    const blocked = rentalAccessError({
+      status: "pending",
+      startsAt: null,
+      endsAt: null,
+    });
+    assert.ok(blocked);
+    assert.equal(blocked?.status, 409);
+  });
+});
+
+describe("rentalCreateRedirectUrl", () => {
+  it("sends unpaid_test creates to /chat?rentalId=", () => {
+    assert.equal(
+      rentalCreateRedirectUrl({
+        id: "rental-unpaid-1",
+        billing: UNPAID_TEST_BILLING,
+        checkoutUrl: null,
+      }),
+      "/chat?rentalId=rental-unpaid-1",
+    );
+  });
+
+  it("keeps Stripe Checkout https URLs for paid creates", () => {
+    assert.equal(
+      rentalCreateRedirectUrl({
+        id: "rental-paid-1",
+        billing: STRIPE_BILLING,
+        checkoutUrl: "https://checkout.stripe.com/c/pay/cs_test_123",
+      }),
+      "https://checkout.stripe.com/c/pay/cs_test_123",
     );
   });
 });

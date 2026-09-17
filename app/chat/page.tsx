@@ -15,6 +15,7 @@ import {
   listRentals,
   rentalIsActive,
 } from "@/lib/runtime/rentals";
+import { isUnpaidAccessAllowed } from "@/lib/runtime/unpaid-access";
 import { getOrCreateOpenSession, listSessionRuns } from "@/lib/runtime/runs";
 import { getSessionForUser, listGroupMembers } from "@/lib/runtime/rooms";
 import {
@@ -27,7 +28,7 @@ import { firstSearchParam } from "@/lib/utils";
 export const metadata: Metadata = {
   title: "Chat",
   description:
-    "Chathub für eine bezahlte Miete. Der Modell-Router streamt, sobald ein Key gesetzt ist; Failover ist optional. Gruppenchat bei mehreren aktiven Mieten.",
+    "Chathub für eine aktive Miete (bezahlt oder Staging unpaid_test). Der Modell-Router streamt, sobald ein Key gesetzt ist; Failover ist optional. Gruppenchat bei mehreren aktiven Mieten.",
 };
 
 export const dynamic = "force-dynamic";
@@ -41,6 +42,7 @@ export default async function ChatPage({
   const session = await getVerifiedSession();
   const failover = getFailoverPresentation();
   const memoryNetwork = getMemoryNetworkPresentation();
+  const unpaidAccess = isUnpaidAccessAllowed();
 
   if (!session?.user) {
     return (
@@ -82,7 +84,11 @@ export default async function ChatPage({
     return (
       <PageShell
         title="Chat"
-        description="Wählen Sie eine aktive, per Webhook bestätigte Miete — oder starten Sie eine Gruppensitzung mit mehreren bezahlten Mietfenstern. Ausstehend, storniert und abgelaufen werden abgelehnt."
+        description={
+          unpaidAccess
+            ? "Wählen Sie eine aktive Miete — bezahlt oder Staging unpaid_test. Ausstehend, storniert und abgelaufen werden abgelehnt."
+            : "Wählen Sie eine aktive, nach Zahlungsbestätigung gültige Miete — oder starten Sie eine Gruppensitzung mit mehreren bezahlten Mietfenstern. Ausstehend, storniert und abgelaufen werden abgelehnt."
+        }
         actions={
           groupCandidates.length >= 2 ? (
             <ButtonLink href={groupChatHref()} variant="secondary">
@@ -94,7 +100,11 @@ export default async function ChatPage({
         {active.length === 0 ? (
           <EmptyState
             title="Keine aktive Miete"
-            description="Bezahlen Sie auf einem Agentenprofil. Der Erfolg-Redirect allein aktiviert die Miete nicht."
+            description={
+              unpaidAccess
+                ? "Starten Sie eine Testmiete über ein Agentenprofil. Zahlung ist in diesem Staging-Modus nicht nötig."
+                : "Bezahlen Sie auf einem Agentenprofil. Der Erfolg-Redirect allein aktiviert die Miete nicht."
+            }
             actionHref="/marketplace"
             actionLabel="Marktplatz öffnen"
           />

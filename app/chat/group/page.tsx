@@ -11,12 +11,13 @@ import {
   rentalIsActive,
 } from "@/lib/runtime/rentals";
 import { parseRentalIdList } from "@/lib/runtime/group-window";
+import { isUnpaidAccessAllowed } from "@/lib/runtime/unpaid-access";
 import { firstSearchParam } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Gruppenchat",
   description:
-    "Mehrere aktive Mieten im überlappenden Fenster. Kein unbezahlter Bypass.",
+    "Mehrere aktive Mieten im überlappenden Fenster. Staging unpaid_test zählt wie bezahlt.",
 };
 
 export const dynamic = "force-dynamic";
@@ -27,6 +28,7 @@ export default async function GroupChatPage({
   const params = await searchParams;
   const requestedIds = parseRentalIdList(firstSearchParam(params.rentalIds));
   const session = await getVerifiedSession();
+  const unpaidAccess = isUnpaidAccessAllowed();
 
   if (!session?.user) {
     return (
@@ -70,7 +72,11 @@ export default async function GroupChatPage({
     <PageShell
       eyebrow="Chat"
       title="Gruppenchat"
-      description="Wählen Sie zwei oder mehr aktive Coding-, Marketing-, Design- oder Sales-Mieten. Die Gruppensitzung entsteht über die Runtime, nicht über unbezahlten Zugang."
+      description={
+        unpaidAccess
+          ? "Wählen Sie zwei oder mehr aktive Coding-, Marketing-, Design- oder Sales-Mieten. Staging unpaid_test-Fenster zählen wie bezahlte."
+          : "Wählen Sie zwei oder mehr aktive Coding-, Marketing-, Design- oder Sales-Mieten. Die Gruppensitzung entsteht über die Runtime."
+      }
       actions={
         <ButtonLink href="/chat" variant="ghost">
           Einzelchat
@@ -80,7 +86,11 @@ export default async function GroupChatPage({
       {candidates.length < 2 ? (
         <EmptyState
           title="Zu wenige aktive Mieten"
-          description="Gruppenchat braucht mindestens zwei per Zahlungsbestätigung aktivierte Mieten in Coding, Marketing, Design oder Sales. Ausstehende Checkouts zählen nicht."
+          description={
+            unpaidAccess
+              ? "Gruppenchat braucht mindestens zwei aktive Mieten in Coding, Marketing, Design oder Sales. Staging unpaid_test zählt. Ausstehende Checkouts zählen nicht."
+              : "Gruppenchat braucht mindestens zwei per Zahlungsbestätigung aktivierte Mieten in Coding, Marketing, Design oder Sales. Ausstehende Checkouts zählen nicht."
+          }
           actionHref="/marketplace"
           actionLabel="Marktplatz öffnen"
         />

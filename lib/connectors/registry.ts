@@ -1,6 +1,16 @@
-import { CONNECTOR_IDS, type ConnectorDefinition, type ConnectorId } from "./types";
+import {
+  CONNECTOR_IDS,
+  FIRST_WAVE_CONNECTOR_IDS,
+  SECOND_WAVE_CONNECTOR_IDS,
+  type ConnectorDefinition,
+  type ConnectorId,
+} from "./types";
 
-export { CONNECTOR_IDS };
+export { CONNECTOR_IDS, FIRST_WAVE_CONNECTOR_IDS, SECOND_WAVE_CONNECTOR_IDS };
+
+export function isFirstWaveConnectorId(value: string): boolean {
+  return (FIRST_WAVE_CONNECTOR_IDS as readonly string[]).includes(value);
+}
 
 export const CONNECTOR_REGISTRY: Record<ConnectorId, ConnectorDefinition> = {
   neon: {

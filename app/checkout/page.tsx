@@ -26,8 +26,8 @@ export const dynamic = "force-dynamic";
 function FirstWaveConnectorsNote() {
   return (
     <p className="text-sm text-muted">
-      First-Wave-Konnektoren werden nach der Zahlung als Freigabe-Stubs angelegt.
-      OAuth ist nicht standardmäßig live.
+      First-Wave-Konnektoren werden nach der Aktivierung (Zahlung oder unpaid_test)
+      als Freigabe-Stubs angelegt. OAuth ist nicht standardmäßig live.
     </p>
   );
 }
