@@ -9,10 +9,13 @@ const links = [
   { href: "/marketplace", label: "Marketplace" },
   { href: "/checkout", label: "Checkout" },
   { href: "/chat", label: "Chat" },
-  { href: "/login", label: "Login" },
 ] as const;
 
-export function SiteNav() {
+type SiteNavProps = {
+  signedIn?: boolean;
+};
+
+export function SiteNav({ signedIn = false }: SiteNavProps) {
   const pathname = usePathname();
 
   return (
@@ -37,6 +40,18 @@ export function SiteNav() {
             </li>
           );
         })}
+        <li>
+          <Link
+            href="/login"
+            aria-current={pathname.startsWith("/login") ? "page" : undefined}
+            className={cn(
+              "transition-colors hover:text-foreground",
+              pathname.startsWith("/login") ? "text-foreground" : "text-muted",
+            )}
+          >
+            {signedIn ? "Account" : "Login"}
+          </Link>
+        </li>
       </ul>
     </nav>
   );

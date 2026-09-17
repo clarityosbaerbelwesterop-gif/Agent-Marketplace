@@ -10,9 +10,9 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # Agent Marketplace
 
-This repository is a rentable AI-agent marketplace: browse agents, rent access, chat with a rented agent, and pay through Stripe. The UI is still route shells. The database layer (Drizzle schema, SQL migrations, RLS) lives in `lib/db/` and `drizzle/`.
+This repository is a rentable AI-agent marketplace: browse agents, rent access, chat with a rented agent, and pay through Stripe. Auth + paginated catalog API + a privileged 10k-row seed are in place. Checkout, chat runtime, and UNOROUTER model IDs are not.
 
-Do not treat placeholder pages as a catalog, checkout, or auth implementation. Do not seed a large fake agent catalog. Do not ship a mock Stripe checkout that looks real.
+Do not ship a mock Stripe checkout that looks real. Do not invent benchmarks, success rates, or user counts on catalog rows. Do not send the full catalog to the browser — always paginate server-side.
 
 ## Stack
 
@@ -26,9 +26,9 @@ Do not treat placeholder pages as a catalog, checkout, or auth implementation. D
 Integrations:
 
 - Lakebase Postgres via Neon (`DATABASE_URL`) — schema + RLS in this repo
-- Neon Auth (Managed Better Auth) — tables already exist in schema `neon_auth`; do **not** recreate them
+- Neon Auth (Managed Better Auth) via `@neondatabase/auth` — tables already exist in schema `neon_auth`; do **not** recreate them or add a second auth library
 - Stripe billing — env placeholders only; `rentals.stripe_session_id` / `stripe_payment_intent_id` are nullable columns, not a checkout
-- Model routing via `UNOROUTER_API_KEY` — not wired
+- Model routing via `UNOROUTER_API_KEY` — not wired; catalog stores **model aliases** (`standard` / `advanced` / `expert` / `elite` / `frontier`), not vendor model IDs
 
 Use **one** auth system (Neon Auth). Do not introduce a second auth library.
 
@@ -38,11 +38,17 @@ Neon project (docs only): `calm-fog-88681490`, default branch `main` / `br-young
 
 | Path | Purpose |
 | --- | --- |
-| `app/` | App Router routes, root layout, global styles |
-| `components/` | Shared UI. Keep presentational; no data fetching of marketplace inventory yet |
-| `lib/` | Shared utilities and server helpers (`lib/db` for Drizzle) |
+| `app/` | App Router routes, root layout, global styles, API handlers |
+| `app/api/auth/[...path]` | Neon Auth proxy (`auth.handler()`) |
+| `app/api/agents` | Paginated public catalog |
+| `app/api/favorites` | Auth-required favorites |
+| `components/` | Shared UI |
+| `lib/` | Shared utilities and server helpers |
+| `lib/auth/` | Neon Auth server instance, session helpers, server actions |
+| `lib/catalog/` | Catalog query parsing, list/detail, favorites |
 | `lib/db/` | Drizzle schema, privileged client, RLS session helper |
 | `drizzle/` | SQL migrations generated/applied with drizzle-kit |
+| `scripts/` | Privileged seed / ops (not a client path) |
 | `types/` | Shared TypeScript domain types |
 
 Route files live next to the URL they represent:
@@ -52,7 +58,10 @@ Route files live next to the URL they represent:
 - `app/agents/[slug]/page.tsx` → `/agents/:slug`
 - `app/checkout/page.tsx` → `/checkout`
 - `app/chat/page.tsx` → `/chat`
-- `app/login/page.tsx` → `/login` (auth placeholder only)
+- `app/login/page.tsx` → `/login` (Neon Auth sign-in / sign-up / sign-out)
+- `GET /api/agents` → paginated catalog (search, category, tier, sort, page, pageSize ≤ 50)
+- `GET /api/agents/[slug]` → agent detail + published skill package
+- `GET|POST /api/favorites`, `DELETE /api/favorites/[slug]` → session-required; uses `withUserRls`
 
 ## Database
 
@@ -75,7 +84,7 @@ Public catalog is shared. Private rows are scoped to a Neon Auth user and/or wor
 
 Auth tables (`neon_auth.user`, `session`, `account`, `organization`, `member`, …) are owned by Neon Auth. Marketplace user columns are `uuid` to match `neon_auth.user.id`. FKs to `neon_auth."user"(id)` are in the SQL migration only so drizzle-kit cannot CREATE/DROP auth tables.
 
-No catalog seed ships with the migration.
+Catalog rows are **not** created by SQL migrations. Seed them with the privileged script (see Commands).
 
 ### Connections
 
@@ -102,7 +111,7 @@ It reads, in order:
 
 Policies compare `auth.user_id() = <uuid_column>::text`.
 
-Next.js should resolve the user from Neon Auth (session cookie / JWT verified against the project JWKS), then:
+Next.js resolves the user with `getVerifiedSession()` / `getVerifiedUserId()` in `lib/auth/server.ts` (`auth.getSession()` from `@neondatabase/auth/next/server`). That is the only trusted identity. Then:
 
 ```ts
 import { withUserRls } from "@/lib/db";
@@ -133,16 +142,35 @@ Every marketplace table has `ENABLE ROW LEVEL SECURITY` and `FORCE ROW LEVEL SEC
 
 Helper functions `is_workspace_member`, `is_workspace_owner`, `is_rental_visible`, `is_session_visible` are `SECURITY DEFINER` so policies do not recurse through RLS.
 
-Catalog writes (new agents, publishing skills) go through `getDb()` / `neondb_owner`, not `authenticated`.
+Catalog writes (new agents, publishing skills, the 10k seed) go through `getDb()` / `neondb_owner`, not `authenticated`. Public catalog **reads** may use `getDb()` because `agent_profiles` is world-readable; still paginate and never return unpublished skills (`published = true` filter). User-scoped tables (favorites, rentals, memories, …) must use `withUserRls` after a server-verified session.
 
 ### Commands
 
 ```bash
-pnpm db:generate   # drizzle-kit generate
-pnpm db:migrate    # drizzle-kit migrate (needs DATABASE_URL_UNPOOLED)
+pnpm db:generate      # drizzle-kit generate
+pnpm db:migrate       # drizzle-kit migrate (needs DATABASE_URL_UNPOOLED)
+pnpm db:seed:agents   # upsert ~10k agent_profiles + published skill packs
 ```
 
-Apply `drizzle/*.sql` to Neon in order. Do not insert a 10k agent seed here.
+Apply `drizzle/*.sql` to Neon in order. Then run `pnpm db:seed:agents` against `DATABASE_URL_UNPOOLED`.
+
+### Catalog seed (`scripts/seed-agent-profiles.ts`)
+
+- Privileged only. Direct (non-pooler) URI. Batched upserts (250 rows).
+- Unique slugs: `{category}-{spec}-{domain}-{tier}` (10,000 combinations).
+- Idempotent: `ON CONFLICT (slug) DO UPDATE` for profiles; `(slug, version)` for skills. Re-runs refresh generated fields and **keep existing ids**. They do not delete slugs the generator no longer emits.
+- Tiers map to **model aliases** of the same name (`standard` … `frontier`). Higher tiers have higher `rental_options` prices, more tokens, and broader permissions/connectors.
+- `rating_status` is `untested` or `baselined` only. No fake benchmarks.
+- Skill packages are shared (`agent_profile_id` null), versioned (`1.0.0` … `2.1.0`), referenced from `agent_profiles.skill_package_version`.
+
+## Neon Auth
+
+- Package: `@neondatabase/auth` (`createNeonAuth` from `@neondatabase/auth/next/server`).
+- Env: `NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET` (≥ 32 chars), `NEXT_PUBLIC_NEON_AUTH_URL`, `NEON_AUTH_JWKS_URL`.
+- API proxy: `app/api/auth/[...path]/route.ts`.
+- Login UI: `/login` (email/password + Google). Sign-out is a server action.
+- `proxy.ts` protects `/account/*` only; catalog routes stay public.
+- JWKS is for verifying raw JWTs (Better Auth JWT plugin) if a non-cookie caller appears later. The Next.js app uses the signed session cookie via `getSession()`, not a client-supplied Bearer token.
 
 ## Coding notes
 

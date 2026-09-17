@@ -1,23 +1,106 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { PageShell } from "@/components/page-shell";
+import { getAgentBySlug, isDatabaseConfigured } from "@/lib/catalog/queries";
 
-export const metadata: Metadata = {
-  title: "Agent",
-};
+export const dynamic = "force-dynamic";
 
-export default async function AgentPage({
+type AgentPageProps = PageProps<"/agents/[slug]">;
+
+export async function generateMetadata({
   params,
-}: PageProps<"/agents/[slug]">) {
+}: AgentPageProps): Promise<Metadata> {
+  const { slug } = await params;
+  if (!isDatabaseConfigured()) {
+    return { title: "Agent" };
+  }
+  const agent = await getAgentBySlug(slug);
+  return { title: agent?.name ?? "Agent" };
+}
+
+export default async function AgentPage({ params }: AgentPageProps) {
   const { slug } = await params;
 
+  if (!isDatabaseConfigured()) {
+    return (
+      <PageShell
+        title="Agent"
+        description="Catalog database is not configured on this server."
+      >
+        <p className="text-sm">
+          Slug: <code className="font-mono">{slug}</code>
+        </p>
+      </PageShell>
+    );
+  }
+
+  const agent = await getAgentBySlug(slug);
+  if (!agent) {
+    notFound();
+  }
+
+  const durations = agent.rentalOptions.durations ?? [];
+
   return (
-    <PageShell
-      title="Agent"
-      description="Agent profile, rental terms, and start-chat actions will land here. This page only reads the slug from the URL."
-    >
-      <p className="text-sm">
-        Slug: <code className="font-mono">{slug}</code>
-      </p>
+    <PageShell title={agent.name} description={agent.tagline ?? agent.description}>
+      <dl className="grid max-w-xl gap-2 text-sm">
+        <div className="flex justify-between gap-4">
+          <dt className="text-muted">Category</dt>
+          <dd>{agent.category}</dd>
+        </div>
+        <div className="flex justify-between gap-4">
+          <dt className="text-muted">Tier</dt>
+          <dd>{agent.tier}</dd>
+        </div>
+        <div className="flex justify-between gap-4">
+          <dt className="text-muted">Model alias</dt>
+          <dd>{agent.modelAlias ?? "—"}</dd>
+        </div>
+        <div className="flex justify-between gap-4">
+          <dt className="text-muted">Skill package</dt>
+          <dd className="font-mono text-xs">{agent.skillPackageVersion ?? "—"}</dd>
+        </div>
+        <div className="flex justify-between gap-4">
+          <dt className="text-muted">Rating status</dt>
+          <dd>{agent.ratingStatus}</dd>
+        </div>
+        <div className="flex justify-between gap-4">
+          <dt className="text-muted">Availability</dt>
+          <dd>{agent.availability}</dd>
+        </div>
+      </dl>
+
+      <p className="max-w-2xl text-sm leading-relaxed">{agent.description}</p>
+
+      {durations.length > 0 ? (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-sm font-medium">Rental options</h2>
+          <ul className="text-sm text-muted">
+            {durations.map((duration) => (
+              <li key={duration.id}>
+                {duration.label}: {(duration.priceCents / 100).toFixed(2)}{" "}
+                {duration.currency} · {duration.usageIncluded.toLocaleString()}{" "}
+                {agent.rentalOptions.usageUnit ?? "tokens"} included
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {agent.skills.length > 0 ? (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-sm font-medium">Skill package</h2>
+          {agent.skills.map((skill) => (
+            <p key={skill.id} className="max-w-2xl text-sm leading-relaxed text-muted">
+              <span className="font-mono text-xs text-foreground">
+                {skill.slug}@{skill.version}
+              </span>
+              {" — "}
+              {skill.instructions}
+            </p>
+          ))}
+        </section>
+      ) : null}
     </PageShell>
   );
 }

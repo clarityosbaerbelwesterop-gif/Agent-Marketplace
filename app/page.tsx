@@ -10,7 +10,7 @@ export default function HomePage() {
   return (
     <PageShell
       title="Rent AI agents"
-      description="This is a greenfield scaffold. Catalog, Neon Auth, Stripe, and chat are not implemented yet — only routes and shared layout."
+      description="Browse a paginated catalog of rentable agents. Sign in with Neon Auth. Checkout and live model routing are not in this slice."
     >
       <ul className="flex flex-col gap-3 text-sm">
         <li>
@@ -20,7 +20,7 @@ export default function HomePage() {
         </li>
         <li>
           <Link className="underline underline-offset-4" href="/login">
-            Auth placeholder
+            Sign in
           </Link>
         </li>
       </ul>

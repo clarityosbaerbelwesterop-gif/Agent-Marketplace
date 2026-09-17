@@ -22,6 +22,8 @@ export const metadata: Metadata = {
     "Greenfield scaffold for a rentable AI-agent marketplace.",
 };
 
+export const dynamic = "force-dynamic";
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en">
