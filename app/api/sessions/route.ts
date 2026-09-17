@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { jsonError, readJsonBody, requireApiUser } from "@/lib/api/guard";
 import { getOrCreateOpenSession } from "@/lib/runtime/runs";
-import { rentalIsActive } from "@/lib/runtime/rentals";
 
 export const dynamic = "force-dynamic";
 
@@ -30,9 +29,6 @@ export async function POST(request: Request) {
   });
   if (!result.ok) {
     return jsonError(result.error, result.status);
-  }
-  if (!rentalIsActive(result.data.rental)) {
-    return jsonError("Rental is not active or has expired", 409);
   }
   return NextResponse.json({
     session: {

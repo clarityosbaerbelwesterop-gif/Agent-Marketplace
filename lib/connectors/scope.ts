@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { withUserRls } from "@/lib/db";
 import { agentSessions, rentals, workspaces } from "@/lib/db/schema";
-import { rentalIsActive } from "@/lib/runtime/rentals";
+import { rentalAccessError } from "@/lib/runtime/rental-status";
 import type { ConnectorScope } from "./types";
 
 export async function resolveConnectorScope(input: {
@@ -49,12 +49,12 @@ export async function resolveConnectorScope(input: {
       if (!rental) {
         return { ok: false as const, error: "Rental not found", status: 404 };
       }
-      if (!rentalIsActive(rental)) {
+      const blocked = rentalAccessError(rental);
+      if (blocked) {
         return {
           ok: false as const,
-          error:
-            "Rental is not active. Connectors require a Stripe-activated rental (signed webhook), not a pending Checkout session.",
-          status: 409,
+          error: blocked.error,
+          status: blocked.status,
         };
       }
       return {

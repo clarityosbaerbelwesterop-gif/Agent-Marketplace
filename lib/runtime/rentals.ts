@@ -17,6 +17,16 @@ import {
   isStripeConfigured,
 } from "@/lib/stripe";
 import { getVerifiedSession } from "@/lib/auth/server";
+import { rentalEndTransition, rentalIsActive } from "./rental-status";
+
+export {
+  cannotEndRentalMessage,
+  rentalAccessError,
+  rentalEndTransition,
+  rentalIsActive,
+  RENTAL_CONFLICT,
+  RENTAL_ENDABLE_STATUSES,
+} from "./rental-status";
 
 function pickDuration(
   durations: AgentRentalDuration[],
@@ -48,44 +58,6 @@ export async function ensurePersonalWorkspace(userId: string) {
       .returning();
     return created;
   });
-}
-
-export function rentalIsActive(rental: {
-  status: string;
-  startsAt: Date | null;
-  endsAt: Date | null;
-}): boolean {
-  if (rental.status !== "active") {
-    return false;
-  }
-  const now = Date.now();
-  if (rental.startsAt && rental.startsAt.getTime() > now) {
-    return false;
-  }
-  if (rental.endsAt && rental.endsAt.getTime() < now) {
-    return false;
-  }
-  return true;
-}
-
-export function rentalAccessError(rental: {
-  status: string;
-  startsAt: Date | null;
-  endsAt: Date | null;
-}): { error: string; status: number } | null {
-  if (rental.status === "canceled") {
-    return { error: "Rental has ended", status: 409 };
-  }
-  if (rental.status === "refunded") {
-    return { error: "Rental was refunded", status: 409 };
-  }
-  if (rental.status === "pending") {
-    return { error: "Rental is pending payment", status: 409 };
-  }
-  if (!rentalIsActive(rental)) {
-    return { error: "Rental is not active or has expired", status: 409 };
-  }
-  return null;
 }
 
 export function serializeRental(
@@ -525,8 +497,6 @@ export async function renewRentalCheckout(input: {
   }
 }
 
-const ENDABLE_STATUSES = new Set(["pending", "active"]);
-
 export async function endRental(input: {
   userId: string;
   rentalId: string;
@@ -548,18 +518,12 @@ export async function endRental(input: {
     if (!row) {
       return { ok: false as const, error: "Rental not found", status: 404 };
     }
-    if (row.rental.status === "canceled") {
+    const transition = rentalEndTransition(row.rental.status);
+    if (!transition.ok) {
       return {
         ok: false as const,
-        error: "Rental has already ended",
-        status: 409,
-      };
-    }
-    if (!ENDABLE_STATUSES.has(row.rental.status)) {
-      return {
-        ok: false as const,
-        error: `Cannot end a ${row.rental.status} rental`,
-        status: 409,
+        error: transition.error,
+        status: transition.status,
       };
     }
 
@@ -572,7 +536,7 @@ export async function endRental(input: {
     const [updated] = await db
       .update(rentals)
       .set({
-        status: "canceled",
+        status: transition.nextStatus,
         endsAt,
         endedAt: now,
         endedByUserId: input.userId,

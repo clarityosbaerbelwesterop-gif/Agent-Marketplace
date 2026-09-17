@@ -42,6 +42,7 @@ Keep the lockfile in sync with one package manager. Prefer **pnpm**.
 | `pnpm start` | Serve the production build |
 | `pnpm lint` | ESLint |
 | `pnpm typecheck` | TypeScript (`tsc --noEmit`) |
+| `pnpm test` | Smoke tests (compare slugs, rental end, discovery grantable, alias fallbacks) |
 | `pnpm db:generate` | Generate SQL migrations from `lib/db/schema.ts` |
 | `pnpm db:migrate` | Apply `drizzle/` migrations (`DATABASE_URL_UNPOOLED`) |
 | `pnpm db:seed:agents` | Upsert ~10k `agent_profiles` + published skill packs |
@@ -60,7 +61,7 @@ Copy `.env.example` to `.env.local`. Expected variables (fill from your own Neon
 - Connector OAuth (optional): `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`, Slack and Vercel equivalents, `CONNECTOR_OAUTH_STATE_SECRET`
 - Optional `GITHUB_DISCOVERY_TOKEN` for `GET /api/connectors/discover` GitHub Search rate limits (catalog-only)
 
-Neon Auth is wired at `/login` and `/api/auth/[...path]`. Stripe Checkout is wired; rentals become `active` only after a signed webhook. Do not commit `.env.local`. See `AGENTS.md` for schema, RLS, auth, and seed rules.
+Neon Auth is wired at `/login` and `/api/auth/[...path]`. Stripe Checkout is wired; rentals become `active` only after a signed webhook. Do not commit `.env.local`. See `AGENTS.md` for schema, RLS, auth, seed rules, and the production go-live checklist.
 
 ## Project layout
 

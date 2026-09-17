@@ -1,3 +1,4 @@
+import { catalogOnlyCandidate } from "./catalog";
 import { fetchJsonWithTimeout } from "./http";
 import { MCP_REGISTRY_SOURCE } from "./sources";
 import type { DiscoveryCandidate, DiscoveryWarning } from "./types";
@@ -54,15 +55,15 @@ export async function fetchOfficialRegistry(
     const repoUrl =
       asString(server.repository?.url) || asString(server.websiteUrl);
     const description = asString(server.description) ?? "";
-    items.push({
-      name,
-      repoUrl,
-      description,
-      source: MCP_REGISTRY_SOURCE.id,
-      sourceRef: asString(server.name) || name,
-      grantable: false,
-      untrusted: true,
-    });
+    items.push(
+      catalogOnlyCandidate({
+        name,
+        repoUrl,
+        description,
+        source: MCP_REGISTRY_SOURCE.id,
+        sourceRef: asString(server.name) || name,
+      }),
+    );
   }
 
   return { items, warning: null };

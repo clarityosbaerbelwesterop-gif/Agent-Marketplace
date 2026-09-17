@@ -8,7 +8,7 @@ import {
 } from "@/lib/db/schema";
 import type { JsonObject } from "@/lib/db/json";
 import type { ChatUsage } from "@/lib/unorouter/types";
-import { rentalAccessError } from "./rentals";
+import { rentalAccessError } from "./rental-status";
 
 export async function getOrCreateOpenSession(input: {
   userId: string;
