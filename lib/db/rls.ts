@@ -1,16 +1,18 @@
+import { sql as drizzleSql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
-import type { Sql } from "postgres";
 import { createSql } from "./client";
 import type { Database } from "./client";
 import * as schema from "./schema";
 
 const globalForRls = globalThis as unknown as {
   marketplaceRlsSql?: ReturnType<typeof createSql>;
+  marketplaceRlsDb?: Database;
 };
 
 function requireRlsDatabaseUrl(): string {
   const url =
-    process.env.DATABASE_AUTHENTICATED_URL ?? process.env.DATABASE_URL;
+    process.env.DATABASE_AUTHENTICATED_URL?.trim() ||
+    process.env.DATABASE_URL?.trim();
   if (!url) {
     throw new Error(
       "DATABASE_URL is not set. For RLS-scoped queries prefer DATABASE_AUTHENTICATED_URL (no BYPASSRLS).",
@@ -19,11 +21,14 @@ function requireRlsDatabaseUrl(): string {
   return url;
 }
 
-function getRlsSql() {
-  if (!globalForRls.marketplaceRlsSql) {
+function getRlsDb(): Database {
+  if (!globalForRls.marketplaceRlsDb) {
     globalForRls.marketplaceRlsSql = createSql(requireRlsDatabaseUrl(), 5);
+    globalForRls.marketplaceRlsDb = drizzle(globalForRls.marketplaceRlsSql, {
+      schema,
+    });
   }
-  return globalForRls.marketplaceRlsSql;
+  return globalForRls.marketplaceRlsDb;
 }
 
 export type JwtClaims = {
@@ -35,15 +40,16 @@ function applyRlsClaims<T>(
   claims: JwtClaims,
   callback: (db: Database) => Promise<T>,
 ): Promise<T> {
-  const sql = getRlsSql();
-  const payload = { role: "authenticated" as const, ...claims };
+  const db = getRlsDb();
+  const payload = JSON.stringify({ role: "authenticated" as const, ...claims });
 
-  return sql.begin(async (tx) => {
-    await tx`select set_config('request.jwt.claims', ${JSON.stringify(payload)}, true)`;
-    await tx`set local role authenticated`;
-    const db = drizzle(tx as unknown as Sql, { schema });
-    return callback(db as Database);
-  }) as Promise<T>;
+  return db.transaction(async (tx) => {
+    await tx.execute(
+      drizzleSql`select set_config('request.jwt.claims', ${payload}, true)`,
+    );
+    await tx.execute(drizzleSql`set local role authenticated`);
+    return callback(tx as unknown as Database);
+  });
 }
 
 /**
