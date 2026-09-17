@@ -135,7 +135,7 @@ export async function executeTurn(
   }
 
   const policy = TIER_RUNTIME_POLICY[context.agent.tier];
-  const tools = runtimeTools();
+  const tools = runtimeTools(context);
   const skillVersion = context.skill
     ? `${context.skill.slug}@${context.skill.version}`
     : context.agent.skillPackageVersion;
@@ -162,12 +162,23 @@ export async function executeTurn(
   await updateRun(context.userId, run.id, { status: "running" });
   await emit({ type: "status", status: "running" });
 
+  const activeConnectors = context.connectorGrants
+    .filter((grant) => grant.status === "active")
+    .map((grant) =>
+      grant.hasCredentials
+        ? `${grant.provider} (credentials stored)`
+        : `${grant.provider} (granted, no credentials)`,
+    );
   const system = buildSystemPrompt({
     agentName: context.agent.name,
     agentDescription: context.agent.description,
     tier: context.agent.tier,
     skill: context.skill,
     memories: context.memories,
+    connectorSummary:
+      activeConnectors.length > 0
+        ? `Active connector grants: ${activeConnectors.join(", ")}.`
+        : "No active connector grants. Connector tools are unavailable until the user connects one.",
   });
 
   const messages: ChatMessage[] = [

@@ -12,6 +12,7 @@ import {
 import { modelsForAlias, normalizeAlias } from "@/lib/unorouter/aliases";
 import type { ChatMessage } from "@/lib/unorouter/types";
 import { listConnectorGrants, mergeConnectorStatus } from "./connectors";
+import { connectorCatalog } from "@/lib/connectors";
 import { getOrCreateOpenSession } from "./runs";
 import { rentalIsActive } from "./rentals";
 import type { RuntimeContext } from "./types";
@@ -152,6 +153,11 @@ export async function loadRuntimeContext(input: {
     return { skill, memoryRows, runRows };
   });
 
+  const connectorGrants = await listConnectorGrants(
+    input.userId,
+    rental.workspaceId,
+  );
+
   return {
     ok: true,
     data: {
@@ -171,11 +177,17 @@ export async function loadRuntimeContext(input: {
           createdAt: row.createdAt.toISOString(),
         })),
       history: historyFromRuns(extra.runRows),
+      connectorGrants,
     },
   };
 }
 
 export async function connectorsForContext(context: RuntimeContext) {
-  const grants = await listConnectorGrants(context.userId, context.rental.workspaceId);
-  return mergeConnectorStatus(context.agent.connectors ?? [], grants);
+  const grants =
+    context.connectorGrants ??
+    (await listConnectorGrants(context.userId, context.rental.workspaceId));
+  return {
+    catalog: connectorCatalog(grants),
+    agentRequested: mergeConnectorStatus(context.agent.connectors ?? [], grants),
+  };
 }

@@ -23,6 +23,7 @@ import type {
   AgentModelConfig,
   AgentPermissions,
   AgentRentalOptions,
+  ConnectorCredentials,
   JsonObject,
   SkillCheckCriteria,
   SkillJsonSchema,
@@ -555,6 +556,14 @@ export const connectorGrants = pgTable(
     provider: text("provider").notNull(),
     scopes: text("scopes").array().notNull().default([]),
     status: connectorGrantStatusEnum("status").notNull().default("pending"),
+    metadata: jsonb("metadata")
+      .$type<JsonObject>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    credentials: jsonb("credentials").$type<ConnectorCredentials | null>(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
     ...timestamps,
   },
   (table) => [

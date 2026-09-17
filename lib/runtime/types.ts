@@ -1,5 +1,6 @@
 import type { AgentTier } from "@/lib/catalog/constants";
 import type { AgentSkill, AgentProfile, AgentRun, AgentSession, Rental } from "@/lib/db";
+import type { PublicConnectorGrant } from "@/lib/connectors";
 import type { ChatMessage, ChatUsage, ModelAlias } from "@/lib/unorouter/types";
 
 export type RuntimeContext = {
@@ -12,6 +13,7 @@ export type RuntimeContext = {
   modelIds: string[];
   memories: Array<{ id: string; kind: string; content: string; createdAt: string }>;
   history: ChatMessage[];
+  connectorGrants: PublicConnectorGrant[];
 };
 
 export type RuntimeEvent =
