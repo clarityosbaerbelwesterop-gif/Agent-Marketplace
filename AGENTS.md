@@ -47,7 +47,9 @@ Neon project (docs only): `calm-fog-88681490`, default branch `main` / `br-young
 | `lib/auth/` | Neon Auth server instance, session helpers, server actions |
 | `lib/catalog/` | Catalog query parsing, list/detail, favorites |
 | `lib/unorouter/` | UnoRouter OpenAI-compatible adapter, alias map, capabilities |
-| `lib/runtime/` | Sessions, runs, memories, connector grant stubs, skill loop |
+| `lib/unorouter/` | UnoRouter OpenAI-compatible adapter, alias map, capabilities |
+| `lib/runtime/` | Sessions, runs, memories, skill loop; connector tools gated on grants |
+| `lib/connectors/` | First-party connector registry, grant CRUD, OAuth callbacks, runtime tools |
 | `lib/stripe/` | Stripe client, Checkout Session create, signed webhook apply |
 | `lib/db/` | Drizzle schema, privileged client, RLS session helper |
 | `drizzle/` | SQL migrations generated/applied with drizzle-kit |
@@ -61,6 +63,7 @@ Route files live next to the URL they represent:
 - `app/agents/[slug]/page.tsx` → `/agents/:slug`
 - `app/checkout/page.tsx` → `/checkout`
 - `app/chat/page.tsx` → `/chat` (active rental session UI)
+- `app/connectors/page.tsx` → `/connectors` (tenant connector grants for a rental)
 - `app/login/page.tsx` → `/login` (Neon Auth sign-in / sign-up / sign-out)
 - `GET /api/agents` → paginated catalog (search, category, tier, sort, page, pageSize ≤ 50)
 - `GET /api/agents/[slug]` → agent detail + published skill package
@@ -72,7 +75,9 @@ Route files live next to the URL they represent:
 - `POST /api/chat` → authenticated SSE (or `{ background: true }` queue); persists `agent_runs`; **rejects** non-active / expired rentals
 - `GET /api/sessions/[id]`, `GET /api/runs/[id]` → poll durable run status
 - `GET|POST /api/memories` → user/workspace memory via `withUserRls`
-- `GET /api/connectors`, `GET|POST /api/connectors/grants` → connector grant stub (OAuth not wired)
+- `GET /api/connectors` → first-party connector catalog (auth). Optional `rentalId` / `sessionId` / `workspaceId` attaches grants
+- `GET|POST|DELETE /api/connectors/grants` → list / request / revoke; RLS via `withUserRls`
+- `GET /api/connectors/oauth/[provider]/callback` → GitHub / Slack / Vercel OAuth code exchange
 
 ## Database
 
@@ -93,7 +98,7 @@ Public catalog is shared. Private rows are scoped to a Neon Auth user and/or wor
 | `agent_sessions` | Chat/runtime session under a rental | workspace member + visible rental |
 | `agent_runs` | Background work during a rental | via session visibility |
 | `memories` | User+workspace isolated notes (`kind` + `content`; no embedding column yet) | owning user in that workspace |
-| `connector_grants` | Per user+workspace provider scopes | owning user in that workspace |
+| `connector_grants` | Per user+workspace provider scopes, status, metadata, optional credentials | owning user in that workspace |
 
 Auth tables (`neon_auth.user`, `session`, `account`, `organization`, `member`, …) are owned by Neon Auth. Marketplace user columns are `uuid` to match `neon_auth.user.id`. FKs to `neon_auth."user"(id)` are in the SQL migration only so drizzle-kit cannot CREATE/DROP auth tables.
 
@@ -168,6 +173,23 @@ pnpm db:seed:agents   # upsert ~10k agent_profiles + published skill packs
 
 Apply `drizzle/*.sql` to Neon in order. Then run `pnpm db:seed:agents` against `DATABASE_URL_UNPOOLED`.
 
+## First-party connectors
+
+Canonical ids: `neon`, `github`, `slack`, `vercel`, `supabase`, `render`, `stripe`, `cursor`. Registry: `lib/connectors/registry.ts` (display name, description, scopes, env/secret names, capability tags). These are **tenant grants during a rental**, not Cursor/Grok Bot marketplace plugins. Catalog seed still emits `postgres` on some rows; runtime maps that to `neon` without a re-seed.
+
+| Connector | Auth | Platform env | Tenant secrets |
+| --- | --- | --- | --- |
+| neon | API key | — | `NEON_API_KEY` |
+| github | OAuth or PAT | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | `GITHUB_TOKEN` |
+| slack | OAuth or bot token | `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET` | `SLACK_BOT_TOKEN` |
+| vercel | OAuth or token | `VERCEL_CLIENT_ID`, `VERCEL_CLIENT_SECRET` | `VERCEL_TOKEN` |
+| supabase | API key | — | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
+| render | API key | — | `RENDER_API_KEY` |
+| stripe | API key (tenant; not Checkout) | — | `STRIPE_SECRET_KEY` |
+| cursor | API key | — | `CURSOR_API_KEY` |
+
+`GET /connectors?rentalId=` is the UI. Do not re-seed the 10k catalog for connector work.
+
 ### Catalog seed (`scripts/seed-agent-profiles.ts`)
 
 - Privileged only. Direct (non-pooler) URI. Batched upserts (250 rows).
@@ -212,7 +234,9 @@ Paid aliases do **not** fall back to `:free` variants. A frontier run will not u
 
 Work is durable in Postgres (`queued` → `running` → `succeeded`/`failed`). `POST /api/chat` streams SSE while the client is connected and uses Next.js `after()` so the run can finish after the browser closes. `{ "background": true }` queues the run and returns IDs for `GET /api/runs/[id]`.
 
-Connector grants: list/request only. OAuth is not wired; `stubGrant: true` marks a row `granted` for runtime tests and is not a payment.
+Connector grants: first-party App MCP set in `lib/connectors/` (`neon`, `github`, `slack`, `vercel`, `supabase`, `render`, `stripe`, `cursor`). Rows live in `connector_grants` (RLS: self + workspace member). API status is `pending` | `active` | `revoked`; Postgres still stores active as `granted`. Credentials JSONB is never returned by APIs. Chat/runtime exposes `{provider}_status` / `{provider}_invoke` **only for active grants**. Tools never invent credentials; missing tokens return structured `not_connected`. `{provider}_invoke` is a stub (`not_implemented`) and does not fabricate resources. `status` tools may ping the provider when a token is stored.
+
+OAuth (authorization code) is implemented for GitHub, Slack, and Vercel when `*_CLIENT_ID` / `*_CLIENT_SECRET` plus a ≥32-char state secret (`CONNECTOR_OAUTH_STATE_SECRET` or `NEON_AUTH_COOKIE_SECRET`) are set. Callbacks: `/api/connectors/oauth/{github|slack|vercel}/callback`. If OAuth env is missing, POST leaves the grant **pending** (no fake success). API-key connectors become active only when the required tenant secrets are posted. `stubGrant` is not supported. The Stripe **connector** is tenant API access for a rented agent, not marketplace Checkout.
 
 Chat and session APIs call `rentalIsActive()` (`status=active` and `ends_at` still in the future). Pending, canceled, refunded, and expired windows return HTTP 409.
 

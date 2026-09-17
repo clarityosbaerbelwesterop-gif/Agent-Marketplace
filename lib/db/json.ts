@@ -18,6 +18,14 @@ export type AgentConnectorSpec = {
   scopes?: string[];
 };
 
+/** Tenant secrets stored on `connector_grants.credentials`. Never returned by APIs. */
+export type ConnectorCredentials = {
+  accessToken?: string;
+  refreshToken?: string;
+  tokenType?: string;
+  apiKeys?: Record<string, string>;
+};
+
 export type AgentPermissions = {
   tools?: string[];
   network?: "none" | "limited" | "full";

@@ -278,10 +278,14 @@ export function ChatClient({
         </button>
       </form>
       <p className="text-sm text-muted">
-        Connector grants:{" "}
-        <Link className="underline underline-offset-4" href={`/api/connectors?rentalId=${rentalId}`}>
-          list
-        </Link>
+        <Link
+          className="underline underline-offset-4"
+          href={`/connectors?rentalId=${rentalId}`}
+        >
+          Connectors
+        </Link>{" "}
+        for this rental (Neon, GitHub, Slack, Vercel, Supabase, Render, Stripe,
+        Cursor). The agent only receives tools for active grants.
       </p>
     </div>
   );

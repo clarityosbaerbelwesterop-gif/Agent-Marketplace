@@ -1,9 +1,16 @@
 import type { ChatTool } from "@/lib/unorouter/types";
-import { listConnectorGrants, requestConnectorGrant } from "./connectors";
+import {
+  connectorCatalog,
+  connectorToolsForGrants,
+  executeConnectorTool,
+  isConnectorToolName,
+  listConnectorGrants,
+  requestConnectorGrant,
+} from "@/lib/connectors";
 import { listMemories, writeMemory } from "./memory";
 import type { RuntimeContext } from "./types";
 
-export function runtimeTools(): ChatTool[] {
+export function runtimeTools(context: RuntimeContext): ChatTool[] {
   const tools: ChatTool[] = [
     {
       type: "function",
@@ -42,7 +49,7 @@ export function runtimeTools(): ChatTool[] {
       function: {
         name: "list_connector_grants",
         description:
-          "List connector tools available on this rental and whether the user has granted access.",
+          "List first-party connectors (neon, github, slack, vercel, supabase, render, stripe, cursor) and this rental's grant status. Does not return secrets.",
         parameters: { type: "object", properties: {} },
       },
     },
@@ -51,7 +58,7 @@ export function runtimeTools(): ChatTool[] {
       function: {
         name: "request_connector_grant",
         description:
-          "Request a connector grant during this rental. OAuth is not wired; the grant is stored as pending.",
+          "Request a first-party connector grant. Does not mark the grant active unless tenant credentials are provided. OAuth must complete in the browser.",
         parameters: {
           type: "object",
           properties: {
@@ -62,6 +69,7 @@ export function runtimeTools(): ChatTool[] {
         },
       },
     },
+    ...connectorToolsForGrants(context.connectorGrants),
   ];
 
   return tools;
@@ -125,15 +133,27 @@ export async function executeRuntimeTool(
         context.rental.workspaceId,
       );
       return JSON.stringify({
-        agentConnectors: context.agent.connectors ?? [],
-        grants,
-        oauth: "not_wired",
+        catalog: connectorCatalog(grants).map((item) => ({
+          id: item.id,
+          displayName: item.displayName,
+          capabilityTags: item.capabilityTags,
+          oauthConfigured: item.oauthConfigured,
+          grant: item.grant
+            ? {
+                status: item.grant.status,
+                hasCredentials: item.grant.hasCredentials,
+                scopes: item.grant.scopes,
+              }
+            : null,
+        })),
+        agentRequested: context.agent.connectors ?? [],
       });
     }
     case "request_connector_grant": {
       const result = await requestConnectorGrant({
         userId: context.userId,
         workspaceId: context.rental.workspaceId,
+        rentalId: context.rental.id,
         provider: String(args.provider ?? ""),
         scopes: Array.isArray(args.scopes)
           ? args.scopes.map((scope) => String(scope))
@@ -142,6 +162,13 @@ export async function executeRuntimeTool(
       return JSON.stringify(result);
     }
     default:
+      if (isConnectorToolName(name)) {
+        return executeConnectorTool({
+          userId: context.userId,
+          workspaceId: context.rental.workspaceId,
+          name,
+        });
+      }
       return JSON.stringify({
         error: `Unknown tool "${name}"`,
       });

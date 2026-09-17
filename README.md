@@ -57,6 +57,7 @@ Copy `.env.example` to `.env.local`. Expected variables (fill from your own Neon
 - Neon Auth: `NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET`, `NEXT_PUBLIC_NEON_AUTH_URL`, `NEON_AUTH_JWKS_URL`
 - Stripe: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` (webhook: `POST /api/webhooks/stripe`)
 - `UNOROUTER_API_KEY` (optional `UNOROUTER_BASE_URL`, `UNOROUTER_MODEL_*` alias overrides)
+- Connector OAuth (optional): `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`, Slack and Vercel equivalents, `CONNECTOR_OAUTH_STATE_SECRET`
 
 Neon Auth is wired at `/login` and `/api/auth/[...path]`. Stripe Checkout is wired; rentals become `active` only after a signed webhook. Do not commit `.env.local`. See `AGENTS.md` for schema, RLS, auth, and seed rules.
 
@@ -69,7 +70,8 @@ components/     # shared UI
 lib/auth/       # Neon Auth server + actions
 lib/catalog/    # paginated catalog queries
 lib/unorouter/  # UnoRouter adapter + alias map
-lib/runtime/    # sessions, runs, memories, connectors
+lib/connectors/ # first-party connector registry + grants
+lib/runtime/    # sessions, runs, memories, connector tools
 lib/stripe/     # Checkout + signed webhooks
 lib/db/         # Drizzle schema + clients
 drizzle/        # SQL migrations
@@ -86,6 +88,7 @@ See `AGENTS.md` for conventions for coding agents.
 - `/agents/[slug]` — agent detail from Postgres
 - `/checkout` → Stripe Checkout resume for a pending rental (`?rentalId=`). Not a fake card form.
 - `/chat` — rental chat (SSE); requires a webhook-activated rental
+- `/connectors` — tenant connector grants for an active rental
 - `/login` — Neon Auth sign-in / sign-up / sign-out
 - `GET /api/agents` — catalog JSON (search, category, tier, sort, page, pageSize)
 - `GET /api/agents/[slug]` — detail JSON
@@ -97,7 +100,9 @@ See `AGENTS.md` for conventions for coding agents.
 - `POST /api/chat` — stream or background run
 - `GET /api/sessions/[id]`, `GET /api/runs/[id]`
 - `GET|POST /api/memories`
-- `GET /api/connectors`, `GET|POST /api/connectors/grants`
+- `GET /api/connectors` — first-party connector catalog (optional rental/workspace grants)
+- `GET|POST|DELETE /api/connectors/grants` — list / request / revoke
+- `GET /api/connectors/oauth/[provider]/callback` — GitHub / Slack / Vercel OAuth
 
 ## Catalog seed
 

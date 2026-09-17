@@ -9,6 +9,7 @@ const links = [
   { href: "/marketplace", label: "Marketplace" },
   { href: "/checkout", label: "Checkout" },
   { href: "/chat", label: "Chat" },
+  { href: "/connectors", label: "Connectors" },
 ] as const;
 
 type SiteNavProps = {

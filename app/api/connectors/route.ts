@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { jsonError, requireApiUser } from "@/lib/api/guard";
-import { connectorsForContext, loadRuntimeContext } from "@/lib/runtime";
+import { connectorCatalog, listConnectorGrants, resolveConnectorScope } from "@/lib/connectors";
 
 export const dynamic = "force-dynamic";
 
@@ -10,24 +10,31 @@ export async function GET(request: Request) {
     return auth.response;
   }
   const url = new URL(request.url);
-  const rentalId = url.searchParams.get("rentalId")?.trim();
-  const sessionId = url.searchParams.get("sessionId")?.trim();
-  if (!rentalId && !sessionId) {
-    return jsonError("rentalId or sessionId is required", 400);
+  const rentalId = url.searchParams.get("rentalId")?.trim() || undefined;
+  const sessionId = url.searchParams.get("sessionId")?.trim() || undefined;
+  const workspaceId = url.searchParams.get("workspaceId")?.trim() || undefined;
+
+  if (!rentalId && !sessionId && !workspaceId) {
+    return NextResponse.json({
+      items: connectorCatalog(),
+      workspaceId: null,
+      rentalId: null,
+    });
   }
-  const context = await loadRuntimeContext({
+
+  const scope = await resolveConnectorScope({
     userId: auth.userId,
-    rentalId: rentalId || undefined,
-    sessionId: sessionId || undefined,
+    rentalId,
+    sessionId,
+    workspaceId,
   });
-  if (!context.ok) {
-    return jsonError(context.error, context.status);
+  if (!scope.ok) {
+    return jsonError(scope.error, scope.status);
   }
-  const items = await connectorsForContext(context.data);
+  const grants = await listConnectorGrants(auth.userId, scope.data.workspaceId);
   return NextResponse.json({
-    rentalId: context.data.rental.id,
-    workspaceId: context.data.rental.workspaceId,
-    oauth: "not_wired",
-    items,
+    items: connectorCatalog(grants),
+    workspaceId: scope.data.workspaceId,
+    rentalId: scope.data.rentalId,
   });
 }

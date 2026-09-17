@@ -31,12 +31,17 @@ export function buildSystemPrompt(input: {
   tier: AgentTier;
   skill: AgentSkill | null;
   memories: Array<{ kind: string; content: string }>;
+  connectorSummary?: string;
 }): string {
   const sections = [
     `You are ${input.agentName}, a rented marketplace agent.`,
     input.agentDescription,
     planningInstructions(input.tier),
+    "First-party connectors are neon, github, slack, vercel, supabase, render, stripe, and cursor. Only use connector tools that were provided. Never invent credentials, resources, or successful API results.",
   ];
+  if (input.connectorSummary) {
+    sections.push(input.connectorSummary);
+  }
   if (input.skill) {
     sections.push(
       `Skill package ${input.skill.slug}@${input.skill.version}:`,
