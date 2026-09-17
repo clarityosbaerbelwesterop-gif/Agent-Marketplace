@@ -22,7 +22,7 @@ export function GroupChatPicker({
     agentSlug: string;
     agentType: AgentType | null;
     endsAt: string | null;
-    startsAt?: string | null;
+    startsAt: string | null;
   }>;
   initiallySelected?: string[];
 }) {
@@ -47,7 +47,13 @@ export function GroupChatPicker({
   }
 
   const selectedRows = useMemo(
-    () => candidates.filter((row) => selected.includes(row.rentalId)),
+    () =>
+      candidates
+        .filter((row) => selected.includes(row.rentalId))
+        .map((row) => ({
+          startsAt: row.startsAt ?? null,
+          endsAt: row.endsAt,
+        })),
     [candidates, selected],
   );
   const overlap = overlappingRentalWindow(selectedRows);
