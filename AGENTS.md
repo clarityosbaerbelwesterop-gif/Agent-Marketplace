@@ -10,9 +10,9 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # Agent Marketplace
 
-This repository is a rentable AI-agent marketplace: browse agents, rent access, chat with a rented agent, and pay through Stripe. Auth + paginated catalog API + a privileged 10k-row seed are in place. Checkout, chat runtime, and UNOROUTER model IDs are not.
+This repository is a rentable AI-agent marketplace: browse agents, start unpaid access (Stripe checkout is **not** implemented), and chat with a rented agent. Auth, paginated catalog API, a privileged 10k-row seed, the UNOROUTER adapter, and the agent runtime (sessions/runs/streaming) are in place.
 
-Do not ship a mock Stripe checkout that looks real. Do not invent benchmarks, success rates, or user counts on catalog rows. Do not send the full catalog to the browser — always paginate server-side.
+Do not ship a mock Stripe checkout that looks real. Do not invent benchmarks, success rates, or user counts on catalog rows. Do not send the full catalog to the browser — always paginate server-side. Do not re-seed the 10k catalog unless the generator itself changed.
 
 ## Stack
 
@@ -27,8 +27,8 @@ Integrations:
 
 - Lakebase Postgres via Neon (`DATABASE_URL`) — schema + RLS in this repo
 - Neon Auth (Managed Better Auth) via `@neondatabase/auth` — tables already exist in schema `neon_auth`; do **not** recreate them or add a second auth library
-- Stripe billing — env placeholders only; `rentals.stripe_session_id` / `stripe_payment_intent_id` are nullable columns, not a checkout
-- Model routing via `UNOROUTER_API_KEY` — not wired; catalog stores **model aliases** (`standard` / `advanced` / `expert` / `elite` / `frontier`), not vendor model IDs
+- Stripe billing — env placeholders only; `rentals.stripe_session_id` / `stripe_payment_intent_id` are nullable columns, not a checkout. `POST /api/rentals` creates **unpaid access** (`status=active`, Stripe ids null) so the runtime can run.
+- Model routing via UnoRouter (`UNOROUTER_API_KEY`, optional `UNOROUTER_BASE_URL`). Catalog rows still store **model aliases** (`standard` / `advanced` / `expert` / `elite` / `frontier`). `lib/unorouter/` maps those aliases to documented UnoRouter model IDs. Same-tier fallbacks never silently downgrade a premium alias to a much weaker model. If the key is missing, adapter code still loads; runtime calls fail with HTTP 503 and a clear message.
 
 Use **one** auth system (Neon Auth). Do not introduce a second auth library.
 
@@ -46,6 +46,8 @@ Neon project (docs only): `calm-fog-88681490`, default branch `main` / `br-young
 | `lib/` | Shared utilities and server helpers |
 | `lib/auth/` | Neon Auth server instance, session helpers, server actions |
 | `lib/catalog/` | Catalog query parsing, list/detail, favorites |
+| `lib/unorouter/` | UnoRouter OpenAI-compatible adapter, alias map, capabilities |
+| `lib/runtime/` | Sessions, runs, memories, connector grant stubs, skill loop |
 | `lib/db/` | Drizzle schema, privileged client, RLS session helper |
 | `drizzle/` | SQL migrations generated/applied with drizzle-kit |
 | `scripts/` | Privileged seed / ops (not a client path) |
@@ -57,11 +59,16 @@ Route files live next to the URL they represent:
 - `app/marketplace/page.tsx` → `/marketplace`
 - `app/agents/[slug]/page.tsx` → `/agents/:slug`
 - `app/checkout/page.tsx` → `/checkout`
-- `app/chat/page.tsx` → `/chat`
+- `app/chat/page.tsx` → `/chat` (active rental session UI)
 - `app/login/page.tsx` → `/login` (Neon Auth sign-in / sign-up / sign-out)
 - `GET /api/agents` → paginated catalog (search, category, tier, sort, page, pageSize ≤ 50)
 - `GET /api/agents/[slug]` → agent detail + published skill package
 - `GET|POST /api/favorites`, `DELETE /api/favorites/[slug]` → session-required; uses `withUserRls`
+- `GET|POST /api/rentals` → list / create unpaid access (not Stripe)
+- `POST /api/chat` → authenticated SSE (or `{ background: true }` queue); persists `agent_runs`
+- `GET /api/sessions/[id]`, `GET /api/runs/[id]` → poll durable run status
+- `GET|POST /api/memories` → user/workspace memory via `withUserRls`
+- `GET /api/connectors`, `GET|POST /api/connectors/grants` → connector grant stub (OAuth not wired)
 
 ## Database
 
@@ -169,7 +176,37 @@ Apply `drizzle/*.sql` to Neon in order. Then run `pnpm db:seed:agents` against `
 - Env: `NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET` (≥ 32 chars), `NEXT_PUBLIC_NEON_AUTH_URL`, `NEON_AUTH_JWKS_URL`.
 - API proxy: `app/api/auth/[...path]/route.ts`.
 - Login UI: `/login` (email/password + Google). Sign-out is a server action.
-- `proxy.ts` protects `/account/*` only; catalog routes stay public.
+- `proxy.ts` protects `/account/*` only; catalog routes stay public. Chat and rental APIs require a server-verified session even though the pages are not in the matcher.
+
+## UNOROUTER
+
+OpenAI-compatible client in `lib/unorouter/`. Official base URL: `https://api.unorouter.com/v1` ([quickstart](https://unorouter.com/en/docs/platform/quickstart)). Canonical secret: `UNOROUTER_API_KEY` (create at https://unorouter.com/en/token). Optional `UNOROUTER_BASE_URL`.
+
+The adapter supports streaming chat completions, tool calling, timeouts/abort, limited retries, `Retry-After` on 429, and 502/503 failover **within the same alias**. Usage (`prompt_tokens`, `completion_tokens`, `total_tokens`) and estimated `cost_usd` are written to `agent_runs`.
+
+Live catalog: `GET {base}/models` with the key (`listModels()`). This environment had no key, so defaults are a **documented snapshot** (quickstart `gpt-oss-120b:free` plus models.dev UnoRouter IDs, 2026-09-17). Override with `UNOROUTER_MODEL_<ALIAS>` / `UNOROUTER_MODEL_<ALIAS>_FALLBACKS`. Do not invent model names; prefer IDs from `/v1/models`.
+
+Default alias map (same-tier fallbacks only):
+
+| Alias | Primary | Fallbacks |
+| --- | --- | --- |
+| standard | `gpt-oss-120b:free` | `deepseek-v4-flash:free`, `gemma-4-31b-it:free` |
+| advanced | `gemini-3.5-flash` | `gpt-5.5`, `deepseek-v4-flash` |
+| expert | `gpt-5.2` | `deepseek-v4-pro`, `glm-5.2` |
+| elite | `claude-sonnet-5` | `kimi-k2.6`, `minimax-m2.7` |
+| frontier | `gpt-5.4` | `claude-opus-4-8` |
+
+Paid aliases do **not** fall back to `:free` variants. A frontier run will not use a standard model.
+
+## Agent runtime
+
+`lib/runtime/` loads `agent_profiles` + the published skill package, creates/continues `agent_sessions` and `agent_runs` for an **active** rental, injects skill instructions (planning / tool selection / result checking / retry — stronger on higher tiers), and reads/writes `memories` through `withUserRls`.
+
+Work is durable in Postgres (`queued` → `running` → `succeeded`/`failed`). `POST /api/chat` streams SSE while the client is connected and uses Next.js `after()` so the run can finish after the browser closes. `{ "background": true }` queues the run and returns IDs for `GET /api/runs/[id]`.
+
+Connector grants: list/request only. OAuth is not wired; `stubGrant: true` marks a row `granted` for runtime tests and is not a payment.
+
+Unpaid access is **not** Stripe. `POST /api/rentals` `{ slug, durationId }` inserts `rentals.status=active` with null Stripe ids.
 - JWKS is for verifying raw JWTs (Better Auth JWT plugin) if a non-cookie caller appears later. The Next.js app uses the signed session cookie via `getSession()`, not a client-supplied Bearer token.
 
 ## Coding notes
