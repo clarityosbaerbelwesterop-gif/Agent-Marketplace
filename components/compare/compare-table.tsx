@@ -2,7 +2,7 @@ import { AgentIdentityMark } from "@/components/agent/agent-meta-badges";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button-link";
 import { formatMoney } from "@/lib/format";
-import { TIER_LABELS } from "@/lib/labels";
+import { TIER_LABELS, connectorUiName } from "@/lib/labels";
 import { checkoutHref } from "@/lib/urls";
 import { formatUsage, isUntested, pickDuration } from "@/lib/ui/agent-presentation";
 import { AGENT_TYPE_LABELS, agentTypeForCategory } from "@/lib/catalog/agent-types";
@@ -144,7 +144,9 @@ export function CompareTable({
           <Row label="Konnektoren">
             {agents.map((agent) => (
               <td key={agent.slug} className="p-4">
-                {agent.connectors.map((item) => item.provider).join(", ") || "—"}
+                {agent.connectors
+                  .map((item) => connectorUiName(item.provider, item.provider))
+                  .join(", ") || "—"}
               </td>
             ))}
           </Row>

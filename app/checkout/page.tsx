@@ -6,10 +6,10 @@ import {
 import { ResumeCheckoutForm } from "@/components/resume-checkout-form";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ButtonLink } from "@/components/ui/button-link";
+import { LegalLinks } from "@/components/legal-links";
 import { PageShell } from "@/components/page-shell";
 import { getVerifiedSession } from "@/lib/auth/server";
 import { getAgentBySlug, isDatabaseConfigured } from "@/lib/catalog/queries";
-import { CONNECTOR_LIST } from "@/lib/connectors";
 import { getRentalForUser, rentalIsActive } from "@/lib/runtime/rentals";
 import { isUnpaidAccessAllowed } from "@/lib/runtime/unpaid-access";
 import { chatRentalHref } from "@/lib/urls";
@@ -18,7 +18,7 @@ import { firstSearchParam } from "@/lib/utils";
 export const metadata: Metadata = {
   title: "Checkout",
   description:
-    "Preis prüfen und mit Stripe Checkout bezahlen. Aktivierung nur per Webhook.",
+    "Preis prüfen und über den gehosteten Checkout bezahlen. Aktivierung erst nach Zahlungsbestätigung.",
 };
 
 export const dynamic = "force-dynamic";
@@ -26,8 +26,8 @@ export const dynamic = "force-dynamic";
 function FirstWaveConnectorsNote() {
   return (
     <p className="text-sm text-muted">
-      First-Wave-Konnektoren (Grant-Stubs nach Zahlung, OAuth nicht standardmäßig
-      live): {CONNECTOR_LIST.map((row) => row.displayName).join(", ")}.
+      First-Wave-Konnektoren werden nach der Zahlung als Freigabe-Stubs angelegt.
+      OAuth ist nicht standardmäßig live.
     </p>
   );
 }
@@ -58,11 +58,11 @@ export default async function CheckoutPage({
       return (
         <PageShell
           title="Checkout"
-          description="Melden Sie sich an, um Stripe Checkout fortzusetzen."
+          description="Melden Sie sich an, um die Zahlung fortzusetzen."
         >
           <EmptyState
             title="Anmeldung nötig"
-            description="Offene Checkout-Sessions hängen an Ihrer Neon-Auth-Sitzung."
+            description="Offene Checkout-Sessions hängen an Ihrer angemeldeten Sitzung."
             actionHref="/login"
             actionLabel="Anmelden"
           />
@@ -89,13 +89,13 @@ export default async function CheckoutPage({
         title="Zahlung"
         description={
           canceled
-            ? "Stripe Checkout wurde abgebrochen. Die Miete bleibt ausstehend, bis ein Webhook die Zahlung bestätigt."
+            ? "Der Checkout wurde abgebrochen. Die Miete bleibt ausstehend, bis die Zahlung bestätigt ist."
             : active
               ? "Diese Miete ist aktiv. Öffnen Sie den Chat."
               : bundle.rental.status === "pending"
                 ? unpaidAccess
-                  ? "Zahlung ausstehend. Im Testmodus starten Sie eine neue Miete ohne Stripe."
-                  : "Zahlung ausstehend. Setzen Sie Stripe Checkout fort. Der Erfolg-Redirect allein aktiviert nichts."
+                  ? "Zahlung ausstehend. Im Testmodus starten Sie eine neue Miete ohne Zahlung."
+                  : "Zahlung ausstehend. Setzen Sie den Checkout fort. Der Erfolg-Redirect allein aktiviert nichts."
                 : "Diese Miete wartet nicht auf Zahlung."
         }
       >
@@ -111,6 +111,7 @@ export default async function CheckoutPage({
         ) : bundle.rental.status === "pending" ? (
           <ResumeCheckoutForm rentalId={bundle.rental.id} />
         ) : null}
+        <LegalLinks prefix="Zahlung unterliegt" />
       </PageShell>
     );
   }
@@ -124,8 +125,8 @@ export default async function CheckoutPage({
       title="Miete prüfen"
       description={
         unpaidAccess
-          ? "Preis liegt offen. Testmodus aktiviert die Miete sofort — ohne Stripe und ohne Kartenformular."
-          : "Preis liegt offen. Weiter zu Stripe Checkout; die Miete wird erst per Webhook aktiv."
+          ? "Preis liegt offen. Testmodus aktiviert die Miete sofort — ohne Zahlung und ohne Kartenformular."
+          : "Preis liegt offen. Weiter zum gehosteten Checkout; die Miete wird erst nach Zahlungsbestätigung aktiv."
       }
     >
       {!agent ? (
@@ -156,6 +157,7 @@ export default async function CheckoutPage({
           </div>
         </div>
       )}
+      <LegalLinks prefix="Zahlung unterliegt" />
     </PageShell>
   );
 }

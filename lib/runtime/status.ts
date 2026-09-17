@@ -44,18 +44,18 @@ export function getFailoverPresentation(
   return {
     primary: {
       id: "unorouter",
-      label: "UNOROUTER",
+      label: "Modell-Router",
       configured: primaryConfigured,
     },
     failover: {
       id: "freellm",
-      label: "FreeLLM",
+      label: "Failover-Router",
       configured: failoverConfigured,
     },
     liveMeter: false,
     notice: failoverConfigured
-      ? "FreeLLM ist als Failover konfiguriert. Kein Live-Meter — der Run speichert provider_used."
-      : "TODO: FreeLLM-Failover ist nicht konfiguriert. Kein simuliertes Live-Meter.",
+      ? "Failover-Router ist konfiguriert. Kein Live-Meter — der Run speichert provider_used."
+      : "TODO: Failover-Router ist nicht konfiguriert. Kein simuliertes Live-Meter.",
   };
 }
 

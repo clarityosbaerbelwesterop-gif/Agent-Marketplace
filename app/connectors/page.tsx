@@ -36,11 +36,11 @@ export default async function ConnectorsPage({
     return (
       <PageShell
         title="Konnektoren"
-        description="Melden Sie sich an, um Neon, GitHub, Slack, Vercel, Supabase, Render, Stripe, Cursor, Higgsfield, LinkedIn, Meta oder Google Search während einer Miete freizugeben. Die neuen Provider sind Grant-Stubs ohne Fake-OAuth."
+        description="Melden Sie sich an, um Konnektoren während einer Miete freizugeben. Ausstehende Freigaben bleiben pending, bis Zugangsdaten oder OAuth vorliegen."
       >
         <EmptyState
           title="Anmeldung nötig"
-          description="Grants hängen an einer verifizierten Neon-Auth-Sitzung."
+          description="Grants hängen an einer verifizierten Sitzung."
           actionHref="/login"
           actionLabel="Anmelden"
         />
@@ -81,7 +81,7 @@ export default async function ConnectorsPage({
         {active.length === 0 ? (
           <EmptyState
             title="Keine aktive Miete"
-            description="Bezahlen Sie auf einem Agentenprofil mit Stripe Checkout. Ausstehende Checkouts schalten keine Konnektoren frei."
+            description="Bezahlen Sie auf einem Agentenprofil. Ausstehende Checkouts schalten keine Konnektoren frei."
             actionHref="/marketplace"
             actionLabel="Marktplatz öffnen"
           />
@@ -103,8 +103,8 @@ export default async function ConnectorsPage({
         {pending.length > 0 ? (
           <div className="flex flex-col gap-2">
             <p className="text-sm text-muted">
-              Warten auf Stripe Checkout (Zahlung fortsetzen; Webhook aktiviert
-              die Miete):
+              Warten auf Zahlungsbestätigung (Zahlung fortsetzen; die Miete
+              wird erst nach Bestätigung aktiv):
             </p>
             <ul className="flex flex-col gap-2 text-sm">
               {pending.map((row) => (
@@ -141,7 +141,7 @@ export default async function ConnectorsPage({
     return (
       <PageShell
         title="Konnektoren"
-        description="Diese Miete wartet noch auf Stripe Checkout. Konnektoren öffnen erst, wenn der Webhook sie aktiv setzt."
+        description="Diese Miete wartet noch auf die Zahlung. Konnektoren öffnen erst, wenn die Miete aktiv ist."
       >
         <ButtonLink href={rentalCheckoutHref(rentalId)} variant="secondary">
           Checkout fortsetzen

@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button-link";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { StartRentalCheckoutForm } from "@/components/start-rental-checkout-form";
+import { LegalLinks } from "@/components/legal-links";
 import { formatMoney } from "@/lib/format";
 import { TIER_LABELS } from "@/lib/labels";
 import { checkoutHref } from "@/lib/urls";
@@ -64,7 +65,7 @@ export function CheckoutSummary({
       <p className="text-xs leading-relaxed text-muted">
         {unpaidAccess
           ? "MARKETPLACE_ALLOW_UNPAID_ACCESS: sofort aktive Testmiete ohne Checkout Session und ohne Karten-UI."
-          : "Hosted Stripe Checkout (`mode=payment`). Die Miete bleibt `pending`, bis der signierte Webhook bestätigt — nicht durch diese Seite."}
+          : "Gehosteter Checkout. Die Miete bleibt ausstehend, bis die Zahlung bestätigt ist — nicht durch diese Seite."}
       </p>
     </Card>
   );
@@ -89,13 +90,13 @@ export function CheckoutPayPanel({
         <div className="flex flex-wrap items-center gap-2">
           <CardTitle>Zahlung</CardTitle>
           <Badge tone="outline">
-            {unpaidAccess ? "Testmodus" : "Stripe Checkout"}
+            {unpaidAccess ? "Testmodus" : "Gehosteter Checkout"}
           </Badge>
         </div>
         <p className="text-sm leading-relaxed text-muted">
           {unpaidAccess
-            ? "Kein Stripe und kein Kartenformular. Live-Test vor der Stripe-Anbindung."
-            : "Kein Kartenformular auf dieser Seite. Stripe hostet die Zahlung."}
+            ? "Keine Zahlungsanbindung und kein Kartenformular. Live-Test vor der Zahlungsanbindung."
+            : "Kein Kartenformular auf dieser Seite. Die Zahlung läuft über den gehosteten Checkout."}
         </p>
       </CardHeader>
       {signedIn ? (
@@ -117,9 +118,10 @@ export function CheckoutPayPanel({
           </ButtonLink>{" "}
           {unpaidAccess
             ? "um eine Testmiete zu starten."
-            : "um mit Stripe zu bezahlen."}
+            : "um zu bezahlen."}
         </p>
       )}
+      <LegalLinks prefix="Es gelten" />
     </Card>
   );
 }

@@ -21,7 +21,7 @@ async function requireCheckoutUser(): Promise<
     redirect("/login");
   }
   if (!isDatabaseConfigured()) {
-    return { ok: false, error: "DATABASE_URL is not configured." };
+    return { ok: false, error: "DATABASE_URL ist nicht gesetzt." };
   }
   return { ok: true, userId };
 }
@@ -30,7 +30,7 @@ function redirectToCheckout(url: unknown): CheckoutActionState {
   if (typeof url === "string" && url.startsWith("https://")) {
     redirect(url);
   }
-  return { error: "Stripe Checkout URL was missing." };
+  return { error: "Die Zahlungs-URL fehlt." };
 }
 
 export async function startRentalCheckout(

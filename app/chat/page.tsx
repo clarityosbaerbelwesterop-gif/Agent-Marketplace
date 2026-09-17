@@ -27,7 +27,7 @@ import { firstSearchParam } from "@/lib/utils";
 export const metadata: Metadata = {
   title: "Chat",
   description:
-    "Chathub für eine bezahlte Miete. UNOROUTER streamt, sobald ein Key gesetzt ist; FreeLLM ist Failover. Gruppenchat bei mehreren aktiven Mieten.",
+    "Chathub für eine bezahlte Miete. Der Modell-Router streamt, sobald ein Key gesetzt ist; Failover ist optional. Gruppenchat bei mehreren aktiven Mieten.",
 };
 
 export const dynamic = "force-dynamic";
@@ -50,7 +50,7 @@ export default async function ChatPage({
       >
         <EmptyState
           title="Anmeldung nötig"
-          description="Der Chathub hängt an einer verifizierten Neon-Auth-Sitzung."
+          description="Der Chathub hängt an einer verifizierten Sitzung."
           actionHref="/login"
           actionLabel="Anmelden"
         />
@@ -94,7 +94,7 @@ export default async function ChatPage({
         {active.length === 0 ? (
           <EmptyState
             title="Keine aktive Miete"
-            description="Bezahlen Sie auf einem Agentenprofil mit Stripe Checkout. Der Erfolg-Redirect allein aktiviert die Miete nicht."
+            description="Bezahlen Sie auf einem Agentenprofil. Der Erfolg-Redirect allein aktiviert die Miete nicht."
             actionHref="/marketplace"
             actionLabel="Marktplatz öffnen"
           />
@@ -245,7 +245,7 @@ export default async function ChatPage({
     return (
       <PageShell
         title={bundle.agent.name}
-        description="Zahlung noch nicht bestätigt. Die Stripe-Erfolgs-URL aktiviert die Miete nicht."
+        description="Zahlung noch nicht bestätigt. Die Erfolgs-URL aktiviert die Miete nicht."
       >
         <PaymentPendingNotice rentalId={rentalId} />
         <ButtonLink href={rentalCheckoutHref(rentalId)} variant="secondary">

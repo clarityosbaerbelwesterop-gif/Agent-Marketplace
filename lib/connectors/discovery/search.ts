@@ -10,7 +10,7 @@ import type {
 } from "./types";
 
 const NOTICE =
-  "Discovery is catalog-only. Do not auto-install or trust arbitrary MCP server code. Only first-party registry connectors can be granted at runtime.";
+  "Nur Katalogsuche. Entdeckte Einträge werden nicht installiert und sind nicht verbindbar. Runtime-Freigaben bleiben die First-Party-Konnektoren einer aktiven Miete.";
 
 const MAX_QUERY_LENGTH = 80;
 const MAX_ITEMS = 40;
@@ -88,9 +88,9 @@ export async function searchDiscoveredConnectors(
     query,
     sources: DISCOVERY_SOURCES.map((source) => ({
       id: source.id,
-      name: source.name,
+      name: source.publicName,
       docs: source.docs,
-      notes: source.notes,
+      notes: source.publicNotes,
     })),
     grantableConnectorIds: CONNECTOR_IDS,
     items,

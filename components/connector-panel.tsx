@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { ConnectorCatalogItem } from "@/lib/connectors";
+import { connectorUiDescription, connectorUiName } from "@/lib/labels";
 
 function statusLabel(item: ConnectorCatalogItem): string {
   if (!item.grant) {
@@ -123,12 +124,16 @@ export function ConnectorPanel({
               className="flex flex-col gap-2 rounded-[var(--radius-md)] border border-border bg-surface-raised p-4 shadow-card"
             >
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h2 className="text-base font-medium">{item.displayName}</h2>
+                <h2 className="text-base font-medium">
+                  {connectorUiName(item.id, item.displayName)}
+                </h2>
                 <span className="text-xs text-muted">{statusLabel(item)}</span>
               </div>
               {compact ? null : (
                 <>
-                  <p className="text-sm text-muted">{item.description}</p>
+                  <p className="text-sm text-muted">
+                    {connectorUiDescription(item.id, item.description)}
+                  </p>
                   <p className="text-xs text-muted">
                     {item.capabilityTags.join(" · ")}
                     {item.oauth ? ` · callback ${item.oauth.callbackPath}` : null}

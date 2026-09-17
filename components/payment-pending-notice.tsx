@@ -43,7 +43,7 @@ export function PaymentPendingNotice({ rentalId }: { rentalId: string }) {
   return (
     <div className="flex max-w-xl flex-col gap-2 text-sm">
       <p>
-        Warten auf Stripe-Bestätigung. Diese Seite wertet den Checkout-Redirect
+        Warten auf Zahlungsbestätigung. Diese Seite wertet den Checkout-Redirect
         nicht als Erfolg.
       </p>
       {error ? (

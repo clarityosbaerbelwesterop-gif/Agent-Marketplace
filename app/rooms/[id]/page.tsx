@@ -27,7 +27,7 @@ export default async function RoomDetailPage({
           title="Anmeldung nötig"
           actionHref="/login"
           actionLabel="Anmelden"
-          description="Gruppenräume sind an eine Neon-Auth-Sitzung gebunden."
+          description="Gruppenräume sind an eine angemeldete Sitzung gebunden."
         />
       </PageShell>
     );

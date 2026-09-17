@@ -61,8 +61,8 @@ export function StartRentalCheckoutForm({
       ) : null}
       <p className="text-sm text-muted">
         {unpaidAccess
-          ? "Staging-Testmodus: die Miete wird sofort aktiv (billing unpaid_test). Kein Stripe Checkout, kein Kartenformular."
-          : "Weiter zu Stripe Checkout zum Katalogpreis. Zugang bleibt ausstehend, bis der Webhook die Zahlung bestätigt — der Erfolg-Redirect allein aktiviert die Miete nicht."}
+          ? "Staging-Testmodus: die Miete wird sofort aktiv (billing unpaid_test). Kein Checkout, kein Kartenformular."
+          : "Weiter zum gehosteten Checkout zum Katalogpreis. Zugang bleibt ausstehend, bis die Zahlung bestätigt ist — der Erfolg-Redirect allein aktiviert die Miete nicht."}
       </p>
       {state?.error ? (
         <p className="text-sm text-danger" role="alert">
@@ -75,8 +75,8 @@ export function StartRentalCheckoutForm({
             ? "Testmiete wird gestartet…"
             : "Testmiete starten"
           : pending
-            ? "Weiterleitung zu Stripe…"
-            : "Weiter zu Stripe Checkout"}
+            ? "Weiterleitung zur Zahlung…"
+            : "Weiter zur Zahlung"}
       </Button>
     </form>
   );

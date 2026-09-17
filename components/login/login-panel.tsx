@@ -12,8 +12,8 @@ export function LoginPanel({ method }: { method: LoginMethod }) {
       <CardHeader>
         <CardTitle>Anmelden</CardTitle>
         <p className="text-sm leading-relaxed text-muted">
-          Platzhalter für Neon Auth (Managed Better Auth). Es gibt kein zweites
-          Auth-System und keine funktionierende Anmeldung.
+          Platzhalter-Anmeldung. Es gibt kein zweites Anmeldesystem und keine
+          funktionierende Sitzung in dieser Ansicht.
         </p>
       </CardHeader>
 
@@ -47,7 +47,7 @@ export function LoginPanel({ method }: { method: LoginMethod }) {
           <Field
             id="magic-email"
             label="E-Mail"
-            hint="Ein Link würde später von Neon Auth verschickt."
+            hint="Ein Link würde später an diese E-Mail geschickt."
           >
             <Input
               id="magic-email"
@@ -77,7 +77,7 @@ export function LoginPanel({ method }: { method: LoginMethod }) {
           <Field
             id="password"
             label="Passwort"
-            hint="Kein lokales Passwort-Konto. Neon Auth übernimmt das später."
+            hint="Kein separates Passwort-Konto außerhalb der Anmeldung."
           >
             <Input
               id="password"
@@ -95,8 +95,8 @@ export function LoginPanel({ method }: { method: LoginMethod }) {
       )}
 
       <p id="login-disabled" className="text-sm text-muted">
-        Felder und Buttons sind absichtlich deaktiviert, bis Neon Auth verdrahtet
-        ist.
+        Felder und Buttons sind absichtlich deaktiviert, bis die Anmeldung
+        verdrahtet ist.
       </p>
     </Card>
   );
