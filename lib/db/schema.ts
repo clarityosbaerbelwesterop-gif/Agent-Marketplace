@@ -872,23 +872,23 @@ export const agentRoomMembers = pgTable(
     pgPolicy("agent_room_members_select", {
       for: "select",
       to: authenticatedRole,
-      using: sql`(select public.is_agent_room_visible(${table.roomId}))`,
+      using: isAgentRoomVisible(table.roomId),
     }),
     pgPolicy("agent_room_members_insert", {
       for: "insert",
       to: authenticatedRole,
-      withCheck: sql`(select public.is_agent_room_owner(${table.roomId}))`,
+      withCheck: isAgentRoomOwner(table.roomId),
     }),
     pgPolicy("agent_room_members_update", {
       for: "update",
       to: authenticatedRole,
-      using: sql`(select public.is_agent_room_owner(${table.roomId}))`,
-      withCheck: sql`(select public.is_agent_room_owner(${table.roomId}))`,
+      using: isAgentRoomOwner(table.roomId),
+      withCheck: isAgentRoomOwner(table.roomId),
     }),
     pgPolicy("agent_room_members_delete", {
       for: "delete",
       to: authenticatedRole,
-      using: sql`(select public.is_agent_room_owner(${table.roomId}))`,
+      using: isAgentRoomOwner(table.roomId),
     }),
   ],
 ).enableRLS();
@@ -916,23 +916,23 @@ export const agentRoomMessages = pgTable(
     pgPolicy("agent_room_messages_select", {
       for: "select",
       to: authenticatedRole,
-      using: sql`(select public.is_agent_room_visible(${table.roomId}))`,
+      using: isAgentRoomVisible(table.roomId),
     }),
     pgPolicy("agent_room_messages_insert", {
       for: "insert",
       to: authenticatedRole,
-      withCheck: sql`(select public.is_agent_room_visible(${table.roomId}))`,
+      withCheck: isAgentRoomVisible(table.roomId),
     }),
     pgPolicy("agent_room_messages_update", {
       for: "update",
       to: authenticatedRole,
-      using: sql`(select public.is_agent_room_visible(${table.roomId}))`,
-      withCheck: sql`(select public.is_agent_room_visible(${table.roomId}))`,
+      using: isAgentRoomVisible(table.roomId),
+      withCheck: isAgentRoomVisible(table.roomId),
     }),
     pgPolicy("agent_room_messages_delete", {
       for: "delete",
       to: authenticatedRole,
-      using: sql`(select public.is_agent_room_owner(${table.roomId}))`,
+      using: isAgentRoomOwner(table.roomId),
     }),
   ],
 ).enableRLS();
