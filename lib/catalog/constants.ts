@@ -34,6 +34,7 @@ export type AgentSort = (typeof AGENT_SORTS)[number];
 export const DEFAULT_PAGE_SIZE = 24;
 export const MAX_PAGE_SIZE = 50;
 export const MIN_PAGE_SIZE = 1;
+export const MAX_COMPARE_SLUGS = 4;
 
 export const AGENT_CATEGORY_SET = new Set<string>(AGENT_CATEGORIES);
 export const AGENT_TIER_SET = new Set<string>(AGENT_TIERS);

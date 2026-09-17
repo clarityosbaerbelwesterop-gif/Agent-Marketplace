@@ -45,11 +45,11 @@ Neon project (docs only): `calm-fog-88681490`, default branch `main` / `br-young
 | `components/` | Shared UI |
 | `lib/` | Shared utilities and server helpers |
 | `lib/auth/` | Neon Auth server instance, session helpers, server actions |
-| `lib/catalog/` | Catalog query parsing, list/detail, favorites |
-| `lib/unorouter/` | UnoRouter OpenAI-compatible adapter, alias map, capabilities |
+| `lib/catalog/` | Catalog query parsing, list/detail/compare, favorites |
 | `lib/unorouter/` | UnoRouter OpenAI-compatible adapter, alias map, capabilities |
 | `lib/runtime/` | Sessions, runs, memories, skill loop; connector tools gated on grants |
 | `lib/connectors/` | First-party connector registry, grant CRUD, OAuth callbacks, runtime tools |
+| `lib/connectors/discovery/` | Catalog-only MCP registry + GitHub topic search (timeouts; not grantable) |
 | `lib/stripe/` | Stripe client, Checkout Session create, signed webhook apply |
 | `lib/db/` | Drizzle schema, privileged client, RLS session helper |
 | `drizzle/` | SQL migrations generated/applied with drizzle-kit |
@@ -60,24 +60,29 @@ Route files live next to the URL they represent:
 
 - `app/page.tsx` → `/`
 - `app/marketplace/page.tsx` → `/marketplace`
+- `app/compare/page.tsx` → `/compare` (uses the compare API; marketplace multi-select)
 - `app/agents/[slug]/page.tsx` → `/agents/:slug`
 - `app/checkout/page.tsx` → `/checkout`
 - `app/chat/page.tsx` → `/chat` (active rental session UI)
 - `app/connectors/page.tsx` → `/connectors` (tenant connector grants for a rental)
+- `app/connectors/discover/page.tsx` → `/connectors/discover` (catalog-only MCP search)
 - `app/login/page.tsx` → `/login` (Neon Auth sign-in / sign-up / sign-out)
 - `GET /api/agents` → paginated catalog (search, category, tier, sort, page, pageSize ≤ 50)
+- `GET /api/agents/compare` → side-by-side catalog fields for up to 4 slugs (no invented benchmarks)
 - `GET /api/agents/[slug]` → agent detail + published skill package
 - `GET|POST /api/favorites`, `DELETE /api/favorites/[slug]` → session-required; uses `withUserRls`
 - `GET|POST /api/rentals` → list / create pending rental + Stripe Checkout Session (`checkoutUrl`)
 - `POST /api/checkout` → same create path as `POST /api/rentals`; also returns `url` for the hosted Checkout redirect
 - `POST /api/rentals/[id]/checkout` → resume an open Checkout Session for a pending rental
 - `POST /api/rentals/[id]/renew` → Checkout Session to extend an already-paid rental
+- `POST /api/rentals/[id]/end` → rental owner only: cancel active/pending rental, close open sessions, cancel queued/running runs, write `ended_at` / `ended_by_user_id` / `end_reason`
 - `POST /api/webhooks/stripe` → signed `checkout.session.completed` / `payment_intent.succeeded` (idempotent)
-- `POST /api/chat` → authenticated SSE (or `{ background: true }` queue); persists `agent_runs`; **rejects** non-active / expired rentals
+- `POST /api/chat` → authenticated SSE (or `{ background: true }` queue); persists `agent_runs`; **rejects** ended, non-active, and expired rentals
 - `GET /api/sessions/[id]`, `GET /api/runs/[id]` → poll durable run status
 - `GET|POST /api/memories` → user/workspace memory via `withUserRls`
 - `GET /api/connectors` → first-party connector catalog (auth). Optional `rentalId` / `sessionId` / `workspaceId` attaches grants
 - `GET /api/connectors/providers` → public first-wave provider list (no session)
+- `GET /api/connectors/discover` → catalog-only MCP server search (`q=`); official registry + GitHub topics; never installs or grants
 - `GET|POST|DELETE /api/connectors/grants` → list / request / revoke; RLS via `withUserRls`
 - `GET /api/connectors/oauth/[provider]/callback` → GitHub / Slack / Vercel OAuth code exchange
 
@@ -94,7 +99,7 @@ Public catalog is shared. Private rows are scoped to a Neon Auth user and/or wor
 | `agent_profiles` | Public catalog (slug unique). Visual identity, `model_config`, connectors, permissions, `rental_options` JSONB, tier, rating status | public **read**; writes: service / privileged role |
 | `agent_skills` | Versioned skill packages; `agent_profile_id` nullable for shared packs; `published` gate | public **read** where `published`; writes: privileged |
 | `favorites` | `(user_id, agent_profile_id)` | owning user |
-| `rentals` | Rental window, usage counters, Stripe session/PI ids | renter or workspace member |
+| `rentals` | Rental window, usage counters, Stripe session/PI ids, end audit (`ended_at`, `ended_by_user_id`, `end_reason`) | renter or workspace member |
 | `rental_payments` | One Checkout/PaymentIntent per purchase or renewal; `applied_at` is the idempotency claim | privileged / webhook (`getDb()`) |
 | `stripe_events` | Processed Stripe event ids (PK) | privileged / webhook (`getDb()`) |
 | `agent_sessions` | Chat/runtime session under a rental | workspace member + visible rental |
@@ -190,7 +195,7 @@ Canonical ids: `neon`, `github`, `slack`, `vercel`, `supabase`, `render`, `strip
 | stripe | API key (tenant; not Checkout) | — | `STRIPE_SECRET_KEY` |
 | cursor | API key | — | `CURSOR_API_KEY` |
 
-`GET /connectors?rentalId=` is the UI. Do not re-seed the 10k catalog for connector work.
+`GET /connectors?rentalId=` is the grant UI. `GET /connectors/discover` and `GET /api/connectors/discover?q=` search public MCP catalogs only (official registry `https://registry.modelcontextprotocol.io/v0.1/servers` and GitHub topics `mcp-server` / `model-context-protocol`). Fetches use timeouts. Results are untrusted metadata (name, repo URL, description) and are **not** grantable. Do not auto-install or execute discovered servers. Optional `GITHUB_DISCOVERY_TOKEN` only raises GitHub Search rate limits. Do not re-seed the 10k catalog for connector work.
 
 ### Catalog seed (`scripts/seed-agent-profiles.ts`)
 
@@ -240,7 +245,7 @@ Connector grants: first-party App MCP set in `lib/connectors/` (`neon`, `github`
 
 OAuth (authorization code) is implemented for GitHub, Slack, and Vercel when `*_CLIENT_ID` / `*_CLIENT_SECRET` plus a ≥32-char state secret (`CONNECTOR_OAUTH_STATE_SECRET` or `NEON_AUTH_COOKIE_SECRET`) are set. Callbacks: `/api/connectors/oauth/{github|slack|vercel}/callback`. If OAuth env is missing, POST leaves the grant **pending** (no fake success). API-key connectors become active only when the required tenant secrets are posted. `stubGrant` is not supported. The Stripe **connector** is tenant API access for a rented agent, not marketplace Checkout.
 
-Chat and session APIs call `rentalIsActive()` (`status=active` and `ends_at` still in the future). Pending, canceled, refunded, and expired windows return HTTP 409.
+Chat and session APIs call `rentalAccessError()` / `rentalIsActive()` (`status=active` and `ends_at` still in the future). Pending, canceled (ended), refunded, and expired windows return HTTP 409. `POST /api/rentals/[id]/end` is rental-owner only: sets `status=canceled`, writes audit columns, closes open `agent_sessions`, cancels `queued`/`running` `agent_runs`, and expires open Stripe Checkout Sessions when keys are present. In-flight runs check that status between tool rounds and stop without overwriting a canceled row to failed.
 
 ## Stripe
 
@@ -255,7 +260,7 @@ Webhook endpoint: `POST /api/webhooks/stripe`. Configure that URL in the Stripe 
 5. Purchase: `pending` → `active`, set `starts_at`/`ends_at` from purchased `durationHours`, store Stripe ids
 6. Renewal: `ends_at = max(ends_at, now) + durationHours`, `usage_included += purchased usage`
 
-`POST /api/rentals` `{ slug, durationId }` inserts `rentals.status=pending` and returns `checkoutUrl`. `POST /api/checkout` is the same create path and also returns `url` for the hosted Checkout redirect. Hosted Checkout is `mode=payment` because catalog `rental_options.durations` are one-time hour windows (4h / 24h / 7d), not recurring subscriptions. `POST /api/rentals/[id]/renew` starts another Checkout Session for an already-paid rental.
+`POST /api/rentals` `{ slug, durationId }` inserts `rentals.status=pending` and returns `checkoutUrl`. `POST /api/checkout` is the same create path and also returns `url` for the hosted Checkout redirect. Hosted Checkout is `mode=payment` because catalog `rental_options.durations` are one-time hour windows (4h / 24h / 7d), not recurring subscriptions. `POST /api/rentals/[id]/renew` starts another Checkout Session for an already-paid rental. `POST /api/rentals/[id]/end` is not a Stripe refund: it stops access for the renter.
 
 Webhook writes use `getDb()` (privileged). `rental_payments` and `stripe_events` have FORCE RLS and no authenticated policies.
 

@@ -58,6 +58,7 @@ Copy `.env.example` to `.env.local`. Expected variables (fill from your own Neon
 - Stripe: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` (webhook: `POST /api/webhooks/stripe`)
 - `UNOROUTER_API_KEY` (optional `UNOROUTER_BASE_URL`, `UNOROUTER_MODEL_*` alias overrides)
 - Connector OAuth (optional): `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`, Slack and Vercel equivalents, `CONNECTOR_OAUTH_STATE_SECRET`
+- Optional `GITHUB_DISCOVERY_TOKEN` for `GET /api/connectors/discover` GitHub Search rate limits (catalog-only)
 
 Neon Auth is wired at `/login` and `/api/auth/[...path]`. Stripe Checkout is wired; rentals become `active` only after a signed webhook. Do not commit `.env.local`. See `AGENTS.md` for schema, RLS, auth, and seed rules.
 
@@ -85,24 +86,29 @@ See `AGENTS.md` for conventions for coding agents.
 
 - `/` — home
 - `/marketplace` — paginated catalog (server-side; never dumps the full list)
+- `/compare` — side-by-side catalog fields (up to 4 slugs)
 - `/agents/[slug]` — agent detail from Postgres
 - `/checkout` → Stripe Checkout resume for a pending rental (`?rentalId=`). Not a fake card form.
 - `/chat` — rental chat (SSE); requires a webhook-activated rental
 - `/connectors` — tenant connector grants for an active rental
+- `/connectors/discover` — catalog-only MCP registry / GitHub topic search
 - `/login` — Neon Auth sign-in / sign-up / sign-out
 - `GET /api/agents` — catalog JSON (search, category, tier, sort, page, pageSize)
+- `GET /api/agents/compare` — side-by-side compare (`slugs=a,b,c`, max 4)
 - `GET /api/agents/[slug]` — detail JSON
 - `GET|POST /api/favorites`, `DELETE /api/favorites/[slug]` — session required
 - `GET|POST /api/rentals` — list / create pending rental + Stripe Checkout Session
 - `POST /api/checkout` — same create path; returns `url` / `checkoutUrl` for hosted Checkout
 - `POST /api/rentals/[id]/checkout` — resume Checkout
 - `POST /api/rentals/[id]/renew` — extend via Checkout
+- `POST /api/rentals/[id]/end` — owner ends an active/pending rental
 - `POST /api/webhooks/stripe` — signed Stripe events (idempotent)
 - `POST /api/chat` — stream or background run
 - `GET /api/sessions/[id]`, `GET /api/runs/[id]`
 - `GET|POST /api/memories`
 - `GET /api/connectors` — first-party connector catalog (optional rental/workspace grants)
 - `GET /api/connectors/providers` — public first-wave provider list
+- `GET /api/connectors/discover` — catalog-only MCP search (`q=`)
 - `GET|POST|DELETE /api/connectors/grants` — list / request / revoke
 - `GET /api/connectors/oauth/[provider]/callback` — GitHub / Slack / Vercel OAuth
 

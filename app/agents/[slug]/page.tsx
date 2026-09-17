@@ -78,6 +78,18 @@ export default async function AgentPage({ params }: AgentPageProps) {
 
       <p className="max-w-2xl text-sm leading-relaxed">{agent.description}</p>
 
+      <p className="text-sm">
+        <Link
+          className="underline underline-offset-4"
+          href={`/compare?slugs=${encodeURIComponent(agent.slug)}`}
+        >
+          Compare
+        </Link>{" "}
+        <span className="text-muted">
+          this agent (add more slugs from the marketplace).
+        </span>
+      </p>
+
       {durations.length > 0 ? (
         <section className="flex flex-col gap-2">
           <h2 className="text-sm font-medium">Rental options</h2>

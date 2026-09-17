@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageShell } from "@/components/page-shell";
+import { MarketplaceCompareSelect } from "@/components/marketplace-compare-select";
 import { AGENT_CATEGORIES, AGENT_TIERS } from "@/lib/catalog/constants";
 import { parseAgentsQuery } from "@/lib/catalog/parse-query";
 import { isDatabaseConfigured, listAgents } from "@/lib/catalog/queries";
@@ -132,23 +133,18 @@ export default async function MarketplacePage({
       {result.items.length === 0 ? (
         <p className="text-sm text-muted">No agents match these filters.</p>
       ) : (
-        <ul className="flex flex-col divide-y divide-border border-y border-border">
-          {result.items.map((agent) => (
-            <li key={agent.id} className="py-4">
-              <Link
-                className="text-sm font-medium underline-offset-4 hover:underline"
-                href={`/agents/${agent.slug}`}
-              >
-                {agent.name}
-              </Link>
-              <p className="mt-1 text-sm text-muted">{agent.tagline ?? agent.description}</p>
-              <p className="mt-1 text-xs text-muted">
-                {agent.category} · {agent.tier} · {agent.ratingStatus}
-                {agent.modelAlias ? ` · alias ${agent.modelAlias}` : ""}
-              </p>
-            </li>
-          ))}
-        </ul>
+        <MarketplaceCompareSelect
+          agents={result.items.map((agent) => ({
+            slug: agent.slug,
+            name: agent.name,
+            tagline: agent.tagline,
+            description: agent.description,
+            category: agent.category,
+            tier: agent.tier,
+            ratingStatus: agent.ratingStatus,
+            modelAlias: agent.modelAlias,
+          }))}
+        />
       )}
 
       {result.totalPages > 1 ? (

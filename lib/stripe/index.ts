@@ -7,7 +7,7 @@ export {
   isStripeWebhookConfigured,
 } from "./config";
 export { getStripe, Stripe } from "./client";
-export { createCheckoutSession, getOpenCheckoutUrl } from "./checkout";
+export { createCheckoutSession, expireOpenCheckoutSession, getOpenCheckoutUrl } from "./checkout";
 export { constructStripeEvent, processStripeEvent } from "./webhook";
 export { applyPaidPayment } from "./apply";
 export { purchaseWindow, renewalEndsAt } from "./windows";

@@ -3,8 +3,10 @@ export { executeTurn } from "./execute";
 export { listMemories, writeMemory } from "./memory";
 export {
   createRentalCheckout,
+  endRental,
   listRentals,
   rentalIsActive,
+  rentalAccessError,
   getRentalForUser,
   resumeRentalCheckout,
   renewRentalCheckout,

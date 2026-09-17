@@ -33,6 +33,12 @@ export default async function ConnectorsPage({
         <Link className="text-sm underline underline-offset-4" href="/login">
           Sign in
         </Link>
+        <p className="text-sm text-muted">
+          Catalog-only MCP discovery (not grants):{" "}
+          <Link className="underline underline-offset-4" href="/connectors/discover">
+            /connectors/discover
+          </Link>
+        </p>
       </PageShell>
     );
   }
@@ -59,7 +65,7 @@ export default async function ConnectorsPage({
     return (
       <PageShell
         title="Connectors"
-        description="Pick a webhook-activated rental. Grants are stored per user and workspace, not as Grok Bot plugins."
+        description="Pick a webhook-activated rental. Grants are stored per user and workspace, not as Grok Bot plugins. Public MCP catalog search is at /connectors/discover and is not grantable."
       >
         {active.length === 0 ? (
           <p className="text-sm text-muted">

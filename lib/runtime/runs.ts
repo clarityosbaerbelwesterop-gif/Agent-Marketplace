@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { withUserRls } from "@/lib/db";
 import {
   agentProfiles,
@@ -8,7 +8,7 @@ import {
 } from "@/lib/db/schema";
 import type { JsonObject } from "@/lib/db/json";
 import type { ChatUsage } from "@/lib/unorouter/types";
-import { rentalIsActive } from "./rentals";
+import { rentalAccessError } from "./rentals";
 
 export async function getOrCreateOpenSession(input: {
   userId: string;
@@ -24,12 +24,9 @@ export async function getOrCreateOpenSession(input: {
     if (!rental) {
       return { ok: false as const, error: "Rental not found", status: 404 };
     }
-    if (!rentalIsActive(rental)) {
-      return {
-        ok: false as const,
-        error: "Rental is not active or has expired",
-        status: 409,
-      };
+    const blocked = rentalAccessError(rental);
+    if (blocked) {
+      return { ok: false as const, error: blocked.error, status: blocked.status };
     }
 
     if (input.sessionId) {
@@ -166,7 +163,14 @@ export async function updateRun(
     const [row] = await db
       .update(agentRuns)
       .set(values)
-      .where(eq(agentRuns.id, runId))
+      .where(
+        patch.status === "succeeded" || patch.status === "failed"
+          ? and(
+              eq(agentRuns.id, runId),
+              inArray(agentRuns.status, ["queued", "running"]),
+            )
+          : eq(agentRuns.id, runId),
+      )
       .returning();
     return row;
   });
@@ -188,6 +192,39 @@ export async function addUsageToRental(
       })
       .where(eq(rentals.id, rentalId));
   });
+}
+
+export class RunCanceledError extends Error {
+  readonly code = "rental_ended";
+  constructor(message = "Rental has ended") {
+    super(message);
+    this.name = "RunCanceledError";
+  }
+}
+
+export async function claimQueuedRun(userId: string, runId: string) {
+  return withUserRls(userId, async (db) => {
+    const [row] = await db
+      .update(agentRuns)
+      .set({ status: "running" })
+      .where(and(eq(agentRuns.id, runId), eq(agentRuns.status, "queued")))
+      .returning();
+    return row ?? null;
+  });
+}
+
+export async function assertRunStillOpen(userId: string, runId: string) {
+  const row = await getRunForUser(userId, runId);
+  if (!row) {
+    throw new RunCanceledError("Run not found");
+  }
+  if (row.run.status === "canceled") {
+    throw new RunCanceledError();
+  }
+  const blocked = rentalAccessError(row.rental);
+  if (blocked) {
+    throw new RunCanceledError(blocked.error);
+  }
 }
 
 export function serializeRun(run: typeof agentRuns.$inferSelect) {

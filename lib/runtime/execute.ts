@@ -1,7 +1,7 @@
 import { chatComplete, chatStream, UnorouterError } from "@/lib/unorouter";
 import type { ChatMessage, ChatToolCall, ChatUsage } from "@/lib/unorouter/types";
 import { buildSystemPrompt, resultCheckPrompt } from "./skills";
-import { createQueuedRun, updateRun, addUsageToRental } from "./runs";
+import { createQueuedRun, updateRun, addUsageToRental, claimQueuedRun, assertRunStillOpen, RunCanceledError } from "./runs";
 import { writeMemory } from "./memory";
 import { executeRuntimeTool, runtimeTools } from "./tools";
 import { TIER_RUNTIME_POLICY, type RuntimeContext, type RuntimeEvent } from "./types";
@@ -159,7 +159,16 @@ export async function executeTurn(
     alias: context.alias,
   });
 
-  await updateRun(context.userId, run.id, { status: "running" });
+  const claimed = await claimQueuedRun(context.userId, run.id);
+  if (!claimed) {
+    await emit({
+      type: "error",
+      message: "Rental has ended",
+      code: "rental_ended",
+    });
+    await emit({ type: "status", status: "canceled" });
+    return;
+  }
   await emit({ type: "status", status: "running" });
 
   const activeConnectors = context.connectorGrants
@@ -200,6 +209,7 @@ export async function executeTurn(
       outputText = "";
       let rounds = 0;
       while (rounds < policy.maxToolRounds) {
+        await assertRunStillOpen(context.userId, run.id);
         const result = await streamAssistant({
           modelIds: context.modelIds,
           messages,
@@ -278,13 +288,16 @@ export async function executeTurn(
       checkNotes,
       modelIdUsed,
     };
-    await updateRun(context.userId, run.id, {
+    const finished = await updateRun(context.userId, run.id, {
       status: "succeeded",
       modelIdUsed,
       output,
       usage,
       finished: true,
     });
+    if (!finished) {
+      throw new RunCanceledError();
+    }
     if (usage?.totalTokens) {
       await addUsageToRental(context.userId, context.rental.id, usage.totalTokens);
     }
@@ -303,6 +316,15 @@ export async function executeTurn(
     });
     await emit({ type: "status", status: "succeeded" });
   } catch (error) {
+    if (error instanceof RunCanceledError) {
+      await emit({
+        type: "error",
+        message: error.message,
+        code: error.code,
+      });
+      await emit({ type: "status", status: "canceled" });
+      return;
+    }
     const messageText =
       error instanceof UnorouterError
         ? error.message

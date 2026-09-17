@@ -29,6 +29,13 @@
       "when": 1789640382984,
       "tag": "0003_connector_grant_secrets",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789641541570,
+      "tag": "0004_rental_end_audit",
+      "breakpoints": true
     }
   ]
 }
