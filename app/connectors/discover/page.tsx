@@ -17,7 +17,7 @@ export default function ConnectorDiscoverPage() {
     <PageShell
       eyebrow="Konnektoren"
       title="MCP entdecken"
-      description="Öffentliche Katalogsuche. Treffer sind untrusted Metadaten und nicht verbindbar. Runtime-Freigaben bleiben die First-Party-Konnektoren einer aktiven Miete."
+      description="Öffentliche Katalogsuche. Treffer sind untrusted Metadaten und nicht verbindbar. Runtime-Freigaben bleiben die First-Party-Konnektoren einer aktiven Miete (Zahlung oder unpaid_test)."
       actions={
         <ButtonLink href="/connectors" variant="secondary">
           Grants

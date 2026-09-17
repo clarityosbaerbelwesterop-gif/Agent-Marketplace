@@ -5,6 +5,8 @@ import {
   SECOND_WAVE_CONNECTOR_IDS,
   connectorCatalog,
   jsonSecretLeaks,
+  latestActiveRental,
+  partitionConnectorCatalog,
   pendingGrantStubRow,
   pendingGrantStubsForWorkspace,
   sanitizePublicMetadata,
@@ -129,7 +131,36 @@ describe("toPublicGrant never leaks vendor secrets", () => {
     const github = items.find((item) => item.id === "github");
     assert.ok(github);
     assert.equal(github?.grantable, true);
+    assert.equal(github?.wave, "first");
     assert.equal(github?.grant?.hasCredentials, true);
     assert.deepEqual(jsonSecretLeaks(items, FORBIDDEN), []);
+
+    const higgsfield = items.find((item) => item.id === "higgsfield");
+    assert.equal(higgsfield?.wave, "stub");
+    assert.equal(higgsfield?.grantable, true);
+  });
+});
+
+describe("Grants registry vs discovery", () => {
+  it("lists first-wave as requestable registry rows and stubs separately", () => {
+    const { firstWave, stubs } = partitionConnectorCatalog(connectorCatalog());
+    assert.deepEqual(
+      firstWave.map((item) => item.id),
+      [...FIRST_WAVE_CONNECTOR_IDS],
+    );
+    assert.deepEqual(
+      stubs.map((item) => item.id),
+      [...SECOND_WAVE_CONNECTOR_IDS],
+    );
+    assert.ok(firstWave.every((item) => item.grantable && item.wave === "first"));
+    assert.ok(stubs.every((item) => item.grantable && item.wave === "stub"));
+  });
+
+  it("picks the newest active rental for /connectors without rentalId", () => {
+    assert.equal(latestActiveRental([]), null);
+    assert.equal(
+      latestActiveRental([{ id: "newest" }, { id: "older" }])?.id,
+      "newest",
+    );
   });
 });

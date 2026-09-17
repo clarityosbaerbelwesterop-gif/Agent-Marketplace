@@ -1,4 +1,4 @@
-import { CONNECTOR_LIST, oauthEnvConfigured } from "./registry";
+import { CONNECTOR_LIST, isFirstWaveConnectorId, oauthEnvConfigured } from "./registry";
 import { canonicalConnectorId } from "./aliases";
 import { toPublicGrant } from "./grants";
 import type { ConnectorCatalogItem, PublicConnectorGrant } from "./types";
@@ -20,6 +20,7 @@ export function connectorCatalog(
       ...definition,
       oauthConfigured: oauthEnvConfigured(definition),
       grantable: true as const,
+      wave: isFirstWaveConnectorId(definition.id) ? ("first" as const) : ("stub" as const),
       grant: grant ? asPublicGrant(grant) : null,
     };
   });
@@ -52,4 +53,18 @@ export function mergeAgentAndSupportedConnectors(
     });
   }
   return CONNECTOR_LIST.map((definition) => byProvider.get(definition.id)!);
+}
+
+export function partitionConnectorCatalog(items: ConnectorCatalogItem[]) {
+  return {
+    firstWave: items.filter((item) => item.wave === "first"),
+    stubs: items.filter((item) => item.wave === "stub"),
+  };
+}
+
+/** `listRentals` is newest-first; use the latest active window for Grants. */
+export function latestActiveRental<T extends { id: string }>(
+  rentals: readonly T[],
+): T | null {
+  return rentals[0] ?? null;
 }

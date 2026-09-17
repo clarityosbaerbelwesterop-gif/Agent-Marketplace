@@ -84,6 +84,7 @@ export type ConnectorCatalogItem = ConnectorDefinition & {
   oauthConfigured: boolean;
   /** First-party registry connectors are grantable; discovered MCP servers are not. */
   grantable: true;
+  wave: "first" | "stub";
   grant: PublicConnectorGrant | null;
 };
 

@@ -1,6 +1,6 @@
 export { CONNECTOR_IDS, CONNECTOR_LIST, CONNECTOR_REGISTRY, FIRST_WAVE_CONNECTOR_IDS, SECOND_WAVE_CONNECTOR_IDS, getConnector, isConnectorId, isFirstWaveConnectorId, oauthEnvConfigured } from "./registry";
 export { canonicalConnectorId } from "./aliases";
-export { connectorCatalog, mergeAgentAndSupportedConnectors } from "./serialize";
+export { connectorCatalog, mergeAgentAndSupportedConnectors, partitionConnectorCatalog, latestActiveRental } from "./serialize";
 export {
   activateOauthGrant,
   ensurePendingConnectorGrantsForRental,
