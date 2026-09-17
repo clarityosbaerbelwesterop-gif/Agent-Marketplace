@@ -7,6 +7,7 @@ import {
   MIN_PAGE_SIZE,
   type AgentSort,
 } from "./constants";
+import { AGENT_FAMILY_SET, isAgentFamily, type AgentFamily } from "./family";
 import {
   isAgentCategoryGroup,
   categoriesForGroup,
@@ -17,6 +18,7 @@ export type ParsedAgentsQuery = {
   search: string | null;
   category: string | null;
   group: AgentCategoryGroup | null;
+  family: AgentFamily | null;
   tier: string | null;
   sort: AgentSort;
   page: number;
@@ -69,15 +71,41 @@ export function parseAgentsQuery(
   if (groupRaw && !isAgentCategoryGroup(groupRaw)) {
     return { error: `Unknown group: ${groupRaw}`, status: 400 };
   }
-  const group = groupRaw as AgentCategoryGroup | null;
+
+  const familyRaw = get("family")?.trim() || null;
+  if (familyRaw && !AGENT_FAMILY_SET.has(familyRaw)) {
+    return { error: `Unknown family: ${familyRaw}`, status: 400 };
+  }
 
   const categoryRaw = get("category")?.trim() || null;
-  if (categoryRaw && !AGENT_CATEGORY_SET.has(categoryRaw)) {
+  if (
+    categoryRaw &&
+    !AGENT_CATEGORY_SET.has(categoryRaw) &&
+    !isAgentFamily(categoryRaw) &&
+    !isAgentCategoryGroup(categoryRaw)
+  ) {
     return { error: `Unknown category: ${categoryRaw}`, status: 400 };
   }
-  if (categoryRaw && group && !categoriesForGroup(group).includes(categoryRaw)) {
+
+  const familyFromAlias =
+    categoryRaw && isAgentFamily(categoryRaw) ? categoryRaw : null;
+  const family =
+    (familyRaw as AgentFamily | null) ??
+    familyFromAlias ??
+    (groupRaw as AgentFamily | null);
+  const group =
+    (groupRaw as AgentCategoryGroup | null) ??
+    (family && isAgentCategoryGroup(family) ? family : null) ??
+    (familyFromAlias && isAgentCategoryGroup(familyFromAlias)
+      ? familyFromAlias
+      : null);
+
+  const category =
+    categoryRaw && AGENT_CATEGORY_SET.has(categoryRaw) ? categoryRaw : null;
+
+  if (category && group && !categoriesForGroup(group).includes(category)) {
     return {
-      error: `Category ${categoryRaw} is not in the ${group} group`,
+      error: `Category ${category} is not in the ${group} group`,
       status: 400,
     };
   }
@@ -104,8 +132,9 @@ export function parseAgentsQuery(
 
   return {
     search: search || null,
-    category: categoryRaw,
+    category,
     group,
+    family,
     tier: tierRaw,
     sort: sortRaw as AgentSort,
     page,

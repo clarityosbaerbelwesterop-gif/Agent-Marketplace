@@ -30,6 +30,14 @@ export function isRentalVisible(rentalIdColumn: AnyPgColumn): SQL {
   return sql`(select public.is_rental_visible(${rentalIdColumn}))`;
 }
 
+export function isAgentRoomVisible(roomIdColumn: AnyPgColumn): SQL {
+  return sql`(select public.is_agent_room_visible(${roomIdColumn}))`;
+}
+
+export function isAgentRoomOwner(roomIdColumn: AnyPgColumn): SQL {
+  return sql`(select public.is_agent_room_owner(${roomIdColumn}))`;
+}
+
 /** Typed wrapper so spreading policies does not collapse pgTable overloads. */
 export function crudPolicies(
   options: Parameters<typeof crudPolicy>[0],

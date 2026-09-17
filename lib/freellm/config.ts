@@ -13,6 +13,7 @@ import { ProviderError } from "@/lib/llm/errors";
 
 export const DEFAULT_FREELLM_BASE_URL = "http://127.0.0.1:3001/v1";
 export const FREELLM_DOCS_URL = "https://github.com/tashfeenahmed/freellmapi";
+export const FREELLM_DOCS = FREELLM_DOCS_URL;
 
 export const DEFAULT_TIMEOUT_MS = 55_000;
 export const DEFAULT_MAX_RETRIES = 2;
@@ -56,3 +57,16 @@ export function getFreellmMaxRetries(): number {
   }
   return DEFAULT_MAX_RETRIES;
 }
+
+/** Prefer FreeLLM before UnoRouter when set (`1` / `true` / `freellm`). */
+export function isFreellmPreferred(): boolean {
+  const raw = (
+    process.env.FREELLM_PREFERRED?.trim() ||
+    process.env.MODEL_CAPACITY?.trim() ||
+    ""
+  ).toLowerCase();
+  return raw === "1" || raw === "true" || raw === "freellm";
+}
+
+export const getRequestTimeoutMs = getFreellmTimeoutMs;
+export const getMaxRetries = getFreellmMaxRetries;

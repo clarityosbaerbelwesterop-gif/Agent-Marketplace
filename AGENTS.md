@@ -50,7 +50,7 @@ Neon project (docs only): `calm-fog-88681490`, default branch `main` / `br-young
 | `lib/unorouter/` | UnoRouter OpenAI-compatible adapter, alias map, capabilities |
 | `lib/freellm/` | FreeLLM-API OpenAI-compatible adapter (failover / high-volume) |
 | `lib/llm/` | Shared OpenAI-compat client + dual-provider routing policy |
-| `lib/runtime/` | Sessions, runs, memories, skill loop; connector tools gated on grants |
+| `lib/runtime/` | Sessions, runs, memories, skill loop, shared network mesh, group sessions, dedicated agent rooms |
 | `lib/connectors/` | First-party connector registry, grant CRUD, OAuth callbacks, runtime tools |
 | `lib/connectors/discovery/` | Catalog-only MCP registry + GitHub topic search (timeouts; not grantable) |
 | `lib/stripe/` | Stripe client, Checkout Session create, signed webhook apply |
@@ -67,10 +67,12 @@ Route files live next to the URL they represent:
 - `app/agents/[slug]/page.tsx` → `/agents/:slug`
 - `app/checkout/page.tsx` → `/checkout`
 - `app/chat/page.tsx` → `/chat` (active rental session UI)
+- `app/rooms/page.tsx` → `/rooms` (multi-agent rooms over active rentals)
+- `app/rooms/[id]/page.tsx` → `/rooms/:id`
 - `app/connectors/page.tsx` → `/connectors` (tenant connector grants for a rental)
 - `app/connectors/discover/page.tsx` → `/connectors/discover` (catalog-only MCP search)
 - `app/login/page.tsx` → `/login` (Neon Auth sign-in / sign-up / sign-out)
-- `GET /api/agents` → paginated catalog (search, category, **group**=coding|marketing|design|sales, tier, sort, page, pageSize ≤ 50)
+- `GET /api/agents` → paginated catalog (search, category, **group** / **family**=coding|marketing|design|sales, tier, sort, page, pageSize ≤ 50)
 - `GET /api/agents/compare` → side-by-side catalog fields for up to 4 slugs (no invented benchmarks)
 - `GET /api/agents/[slug]` → agent detail + published skill package
 - `GET|POST /api/favorites`, `DELETE /api/favorites/[slug]` → session-required; uses `withUserRls`
@@ -82,7 +84,9 @@ Route files live next to the URL they represent:
 - `POST /api/webhooks/stripe` → signed `checkout.session.completed` / `payment_intent.succeeded` (idempotent)
 - `POST /api/chat` → authenticated SSE (or `{ background: true }` queue); persists `agent_runs`; **rejects** ended, non-active, and expired rentals
 - `GET /api/sessions/[id]`, `GET /api/runs/[id]` → poll durable run status
-- `GET|POST /api/memories` → user/workspace memory via `withUserRls` (short transactions; `visibility=user|workspace`)
+- `GET|POST /api/memories` → user/workspace memory via `withUserRls` (short transactions; `visibility=user|workspace`; `network`/`private` aliases map onto those)
+- `GET /api/network` → workspace-scoped shared-agent mesh summaries (RLS; not cross-tenant)
+- `GET|POST /api/rooms`, `GET /api/rooms/[id]`, `POST /api/rooms/[id]/members`, `DELETE /api/rooms/[id]/members/[rentalId]`, `POST /api/rooms/[id]/messages` → dedicated multi-agent rooms (active rentals only; one coordinated round per user message)
 - `POST /api/sessions` → `{ rentalId }` solo or `{ kind: "group", rentalIds }` (2–4 active paid rentals)
 - `GET /api/connectors` → first-party connector catalog (auth). Optional `rentalId` / `sessionId` / `workspaceId` attaches grants
 - `GET /api/connectors/providers` → public first-wave provider list (no session)
@@ -100,7 +104,7 @@ Public catalog is shared. Private rows are scoped to a Neon Auth user and/or wor
 | --- | --- | --- |
 | `workspaces` | Named workspace; `owner_user_id` → `neon_auth.user.id` (uuid) | members / owner |
 | `workspace_members` | `(workspace_id, user_id, role)` | members; writes: owner |
-| `agent_profiles` | Public catalog (slug unique). Visual identity, `model_config`, connectors, permissions, `rental_options` JSONB, tier, rating status | public **read**; writes: service / privileged role |
+| `agent_profiles` | Public catalog (slug unique). Visual identity, `family` (coding/marketing/design/sales), `model_config`, connectors, permissions, `rental_options` JSONB, tier, rating status | public **read**; writes: service / privileged role |
 | `agent_skills` | Versioned skill packages; `agent_profile_id` nullable for shared packs; `published` gate | public **read** where `published`; writes: privileged |
 | `favorites` | `(user_id, agent_profile_id)` | owning user |
 | `rentals` | Rental window, usage counters, Stripe session/PI ids, end audit (`ended_at`, `ended_by_user_id`, `end_reason`) | renter or workspace member |
@@ -111,6 +115,9 @@ Public catalog is shared. Private rows are scoped to a Neon Auth user and/or wor
 | `agent_runs` | Background work during a rental (`model_id_used`, `provider_used`) | via session visibility |
 | `memories` | User+workspace isolated notes (`kind` + `visibility` + `content`; no embedding column yet) | owning user, or workspace-shared for members |
 | `connector_grants` | Per user+workspace provider scopes, status, metadata, optional credentials | owning user in that workspace |
+| `skill_learning_events` | Async queue of short learnings (`FOR UPDATE SKIP LOCKED` + advisory try-lock) | workspace members read; owner writes |
+| `network_nodes` / `network_edges` | Shared skill/info mesh summaries (never full chat dumps; **workspace-scoped, not cross-tenant**) | workspace members |
+| `agent_rooms` / `agent_room_members` / `agent_room_messages` | Dedicated multi-agent rooms over the owner's **active** rentals | owner / workspace member |
 
 Auth tables (`neon_auth.user`, `session`, `account`, `organization`, `member`, …) are owned by Neon Auth. Marketplace user columns are `uuid` to match `neon_auth.user.id`. FKs to `neon_auth."user"(id)` are in the SQL migration only so drizzle-kit cannot CREATE/DROP auth tables.
 
@@ -172,8 +179,12 @@ Every marketplace table has `ENABLE ROW LEVEL SECURITY` and `FORCE ROW LEVEL SEC
 | `memories` | none | SELECT: workspace member **and** (`user_id` = self **or** `visibility=workspace`). INSERT/UPDATE/DELETE: `user_id` = self **and** workspace member. Short `withUserRls` transactions; no global lock. |
 | `connector_grants` | none | `user_id` = self **and** workspace member |
 | `agent_session_members` | none | via `is_session_visible` (host or member rental visible) |
+| `skill_learning_events` / `network_nodes` | none | workspace member read; writes: self + member |
+| `network_edges` | none | workspace member |
+| `agent_rooms` | none | owner or workspace member; writes: owner |
+| `agent_room_members` / `agent_room_messages` | none | via `is_agent_room_visible` / `is_agent_room_owner` |
 
-Helper functions `is_workspace_member`, `is_workspace_owner`, `is_rental_visible`, `is_session_visible` are `SECURITY DEFINER` so policies do not recurse through RLS.
+Helper functions `is_workspace_member`, `is_workspace_owner`, `is_rental_visible`, `is_session_visible`, `is_agent_room_visible`, `is_agent_room_owner` are `SECURITY DEFINER` so policies do not recurse through RLS.
 
 Catalog writes (new agents, publishing skills, the 10k seed) go through `getDb()` / `neondb_owner`, not `authenticated`. Public catalog **reads** may use `getDb()` because `agent_profiles` is world-readable; still paginate and never return unpublished skills (`published = true` filter). User-scoped tables (favorites, rentals, memories, …) must use `withUserRls` after a server-verified session. Stripe webhook apply (`rental_payments`, `stripe_events`, activating/extending `rentals`) uses `getDb()` because Stripe has no user JWT.
 
@@ -213,7 +224,7 @@ Canonical ids: `neon`, `github`, `slack`, `vercel`, `supabase`, `render`, `strip
 
 - Privileged only. Direct (non-pooler) URI. Batched upserts (250 rows).
 - Unique slugs: `{category}-{spec}-{domain}-{tier}` (10,000 combinations).
-- First-class filter groups (no re-seed): Coding, Marketing, Design, Sales map existing catalog categories (`software`/`frontend`/… → coding, plus `marketing`, `design`, `sales`). Other catalog categories remain filterable.
+- First-class filter groups / families (no re-seed): Coding, Marketing, Design, Sales. `agent_profiles.family` is backfilled in SQL (`0007`) from category heuristics. `?family=` and `?group=` and `?category=coding` alias the same four names. Other catalog categories remain filterable.
 - Idempotent: `ON CONFLICT (slug) DO UPDATE` for profiles; `(slug, version)` for skills. Re-runs refresh generated fields and **keep existing ids**. They do not delete slugs the generator no longer emits.
 - Tiers map to **model aliases** of the same name (`standard` … `frontier`). Higher tiers have higher `rental_options` prices, more tokens, and broader permissions/connectors.
 - `rating_status` is `untested` or `baselined` only. No fake benchmarks.
@@ -256,7 +267,29 @@ OpenAI-compatible client in `lib/freellm/`. Point `FREELLM_BASE_URL` at a FreeLL
 
 - Paid / Frontier: UNOROUTER primary + same-tier fallbacks first. FreeLLM is appended as `failover`, or inserted after the first UNOROUTER hop for **high-volume continuation** (usage ≥ 50% of included tokens or ≥ 80k consumed).
 - Standard: UNOROUTER first when configured; FreeLLM is available without a paid-downgrade flag.
+- `FREELLM_PREFERRED=1` / `MODEL_CAPACITY=freellm` inserts FreeLLM before UNOROUTER.
+- Same-tier-or-better on FreeLLM: paid aliases never keep a weaker `auto:fast` / `auto:standard` env override. Documented `auto:smart` is allowed for paid aliases.
 - The run always stores `model_id_used` (actual routed id, including FreeLLM `X-Routed-Via` when present), `provider_used`, and `downgradedFromPaid` when a paid alias was served by FreeLLM.
+- Long-running runs persist `agent_runs`. If the model hits a length cutoff, the runtime continues (up to 3 times). Streaming failover does **not** restart on another provider after tokens already reached the client.
+
+## Agent families
+
+Catalog `family` is `coding` | `marketing` | `design` | `sales`. Migration `0007` backfills from category heuristics (no 10k reseed). `GET /api/agents?family=coding` filters on the column **or** mapped categories. `?group=` and `?category=coding` are accepted as aliases.
+
+| Family | Categories |
+| --- | --- |
+| coding | software, frontend, backend, databases, devops, QA, security, data analysis |
+| marketing | marketing, writing, research |
+| design | design |
+| sales | sales, project management |
+
+## Shared agent network
+
+Workspace-scoped mesh (`network_nodes`, `network_edges`, `skill_learning_events`) sits next to `memories.visibility=workspace` from `0006`. **Not cross-tenant.** Concurrent agents enqueue events and claim with `FOR UPDATE SKIP LOCKED` plus `pg_try_advisory_xact_lock(hashtext(workspace_id))` so they never deadlock or wait each other out. Consumers read **summaries**, never full chat dumps. Expert/elite/frontier may publish `verified` learnings; lower tiers queue unverified notes. Runtime injects a short mesh digest into the system prompt. Tool `visibility=network` writes workspace memory and queues a skill-learning event.
+
+## Dedicated multi-agent rooms
+
+When the user has two or more **active** rentals in one workspace, `POST /api/rooms` creates an `agent_room` (separate from `agent_sessions.kind=group`). Members must stay active rentals. `POST /api/rooms/[id]/messages` fans out **one parallel turn per member** (no agent-to-agent follow-up round). Runs continue in the background; the room UI polls working states. Minimal pages: `/rooms`, `/rooms/[id]`.
 
 ## Agent runtime
 
@@ -265,6 +298,8 @@ OpenAI-compatible client in `lib/freellm/`. Point `FREELLM_BASE_URL` at a FreeLL
 **Shared learning network:** `memories.visibility` is `user` (default, private) or `workspace` (readable by every workspace member, including concurrent rented agents). Writes are one short RLS transaction each; there is no advisory lock that serializes all agents. Isolation remains user + workspace + RLS.
 
 **Group chat:** `POST /api/sessions` `{ kind: "group", rentalIds }` opens an `agent_sessions.kind=group` room with `agent_session_members`. Only the signed-in user's **active paid** rentals in the same workspace may join (2–4). `POST /api/chat` with that `sessionId` fans the turn to each remaining member. Ending a rental removes it from rooms and closes the group when fewer than two paid members remain.
+
+**Dedicated agent rooms:** `POST /api/rooms` uses `agent_rooms` (not group sessions). Fan-out is one coordinated turn per member; see `/rooms`.
 
 Work is durable in Postgres (`queued` → `running` → `succeeded`/`failed`). `POST /api/chat` streams SSE while the client is connected and uses Next.js `after()` so the run can finish after the browser closes. `{ "background": true }` queues the run and returns IDs for `GET /api/runs/[id]`.
 
@@ -346,6 +381,7 @@ Empty Stripe keys make checkout and webhook routes return HTTP 503. There is no 
 | `FREELLM_API_KEY` | Unified key for a FreeLLM `/v1` router. Optional failover / high-volume path |
 | `FREELLM_BASE_URL` | Optional; default `http://127.0.0.1:3001/v1` |
 | `FREELLM_MODEL_<ALIAS>` / `_FALLBACKS` | Optional FreeLLM `auto*` (or catalog id) overrides |
+| `FREELLM_PREFERRED` / `MODEL_CAPACITY` | Optional `1` / `true` / `freellm` to try FreeLLM before UnoRouter |
 
 **Connector OAuth (optional; GitHub / Slack / Vercel)**
 
@@ -372,7 +408,7 @@ If OAuth env is missing, grant POST stays `pending` (no fake success). API-key c
 - [ ] Add `http://localhost:3000` only for local/dev, not as a substitute for production.
 - [ ] Confirm Google (and email/password) callback hosts match those domains.
 
-### 5. Migrations `0000`–`0006`
+### 5. Migrations `0000`–`0009`
 
 Apply `drizzle/*.sql` **in order** against `DATABASE_URL_UNPOOLED` (`pnpm db:migrate`):
 
@@ -384,9 +420,12 @@ Apply `drizzle/*.sql` **in order** against `DATABASE_URL_UNPOOLED` (`pnpm db:mig
 | `drizzle/0003_connector_grant_secrets.sql` | Connector grant credentials column |
 | `drizzle/0004_rental_end_audit.sql` | `ended_at` / `ended_by_user_id` / `end_reason` |
 | `drizzle/0005_rental_end_lookup_idx.sql` | Session/run indexes used by rental end |
-| `drizzle/0006_shared_memory_group_sessions.sql` | Memory `visibility`, group sessions + members, `provider_used`, session visibility via member rentals |
+| `drizzle/0006_shared_memory_group_sessions.sql` | Memory `visibility` (`user`\|`workspace`), group sessions + members, `provider_used` |
+| `drizzle/0007_agent_family.sql` | `agent_profiles.family` + category heuristic backfill (no 10k reseed) |
+| `drizzle/0008_shared_network.sql` | `skill_learning_events`, `network_nodes`, `network_edges` + GRANT to `authenticated` |
+| `drizzle/0009_agent_rooms.sql` | Dedicated multi-agent rooms + RLS helpers + GRANT to `authenticated` |
 
-Then seed once: `pnpm db:seed:agents` (idempotent upsert; do not re-seed unless the generator changed).
+Then seed once: `pnpm db:seed:agents` (idempotent upsert; do not re-seed unless the generator changed). Family backfill is SQL — do not reseed just for families.
 
 ### 6. Smoke after deploy
 
@@ -395,9 +434,23 @@ Then seed once: `pnpm db:seed:agents` (idempotent upsert; do not re-seed unless 
 - [ ] Create Checkout (`POST /api/checkout` and `POST /api/rentals` stay aligned: `{ slug, durationId }`; checkout also returns `url`).
 - [ ] Pay in Stripe test/live; webhook sets `rentals.status=active`. Client success URL `/chat?rentalId=` is **not** trusted.
 - [ ] Chat against that rental; ended/pending/expired rentals return HTTP 409 (`Rental has ended` / pending / expired copy).
-- [ ] `GET /api/agents?group=coding&pageSize=1` maps existing software/frontend/… categories (no invented benchmarks).
+- [ ] `GET /api/agents?group=coding&pageSize=1` and `GET /api/agents?family=coding&pageSize=1` map existing software/frontend/… categories (no invented benchmarks).
 - [ ] `GET /api/connectors/discover?q=github` items have `grantable: false`.
 - [ ] `GET /api/connectors/providers` includes `higgsfield`, `linkedin`, `meta`, `google-search` as stubs (oauthConfigured false unless you add real OAuth later).
+
+### 7. AWS Serverless as Vercel fallback (Tung owns deploy)
+
+Primary production host is **Vercel** + **Neon** (Lakebase Postgres, Neon Auth). Do **not** move the database off Neon.
+
+If Vercel is unavailable, AWS Serverless is the documented fallback (Tung owns this path):
+
+- Next.js on **AWS Lambda** via [OpenNext](https://opennext.js.org/) / SST or a container on **App Runner** / **ECS Fargate** behind **API Gateway** + CloudFront.
+- Keep `DATABASE_URL` (pooled) and `DATABASE_URL_UNPOOLED` pointed at the same Neon project. Do not stand up RDS as a substitute.
+- Stripe webhook URL and Neon Auth Trusted Domains must include the AWS origin.
+- Long SSE / room fan-out: raise Lambda timeout or run the agent loop on Neon Functions (close to Postgres, up to hours) if Lambda duration is too short.
+- Secrets stay in AWS SSM / Secrets Manager (or Vercel env) — never in git.
+
+This section is a deploy note only. It does not change application code or Neon RLS.
 
 ## Coding notes
 

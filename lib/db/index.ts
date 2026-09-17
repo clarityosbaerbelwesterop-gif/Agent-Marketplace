@@ -12,11 +12,17 @@ import type {
   connectorGrants,
   favorites,
   memories,
+  networkEdges,
+  networkNodes,
   rentalPayments,
   rentals,
+  skillLearningEvents,
   stripeEvents,
   workspaceMembers,
   workspaces,
+  agentRooms,
+  agentRoomMembers,
+  agentRoomMessages,
 } from "./schema";
 
 export type Workspace = typeof workspaces.$inferSelect;
@@ -56,3 +62,10 @@ export type NewMemory = typeof memories.$inferInsert;
 
 export type ConnectorGrant = typeof connectorGrants.$inferSelect;
 export type NewConnectorGrant = typeof connectorGrants.$inferInsert;
+
+export type SkillLearningEvent = typeof skillLearningEvents.$inferSelect;
+export type NetworkNode = typeof networkNodes.$inferSelect;
+export type NetworkEdge = typeof networkEdges.$inferSelect;
+export type AgentRoom = typeof agentRooms.$inferSelect;
+export type AgentRoomMember = typeof agentRoomMembers.$inferSelect;
+export type AgentRoomMessage = typeof agentRoomMessages.$inferSelect;

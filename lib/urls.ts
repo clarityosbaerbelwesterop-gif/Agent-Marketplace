@@ -18,6 +18,7 @@ export function marketplaceHref(input: HrefInput = {}): string {
   if (input.search) params.set("search", input.search);
   if (input.group) params.set("group", input.group);
   if (input.category) params.set("category", input.category);
+  if (input.family) params.set("family", input.family);
   if (input.tier) params.set("tier", input.tier);
   if (input.sort && input.sort !== "newest") params.set("sort", input.sort);
   if (input.page && input.page > 1) params.set("page", String(input.page));

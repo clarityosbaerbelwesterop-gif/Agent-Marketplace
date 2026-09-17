@@ -3,17 +3,19 @@ import { ProviderError } from "@/lib/llm/errors";
 import type { AliasInput, ModelAlias } from "@/lib/unorouter/types";
 
 /**
- * FreeLLM documented routing strategies (not invented model names).
+ * Marketplace aliases → FreeLLM documented routing strategies.
  * Source: FreeLLM-API REST docs — `auto`, `auto:smart`, `auto:fast`,
- * `auto:reliable`, `auto:balanced`. The router picks a live free-tier model.
- *
- * Env overrides:
- *   FREELLM_MODEL_STANDARD
- *   FREELLM_MODEL_STANDARD_FALLBACKS=id1,id2
- *
- * Paid aliases still may use FreeLLM only as an explicit failover path.
- * The runtime records the actual routed model id on the run.
+ * `auto:reliable`, `auto:balanced`. Same-tier-or-better: paid aliases never
+ * keep a weaker `auto:fast` / `auto:standard` env override.
  */
+const ALIAS_RANK: Record<ModelAlias, number> = {
+  standard: 0,
+  advanced: 1,
+  expert: 2,
+  elite: 3,
+  frontier: 4,
+};
+
 const SNAPSHOT: Record<
   ModelAlias,
   { primary: string; fallbacks: string[]; notes: string }
@@ -25,22 +27,22 @@ const SNAPSHOT: Record<
   },
   advanced: {
     primary: "auto:smart",
-    fallbacks: ["auto:reliable", "auto"],
+    fallbacks: ["auto:reliable", "auto:advanced"],
     notes: "Failover only for paid advanced unless UNOROUTER is missing.",
   },
   expert: {
     primary: "auto:smart",
-    fallbacks: ["auto:reliable", "auto"],
+    fallbacks: ["auto:reliable", "auto:expert"],
     notes: "Failover only for paid expert unless UNOROUTER is missing.",
   },
   elite: {
     primary: "auto:smart",
-    fallbacks: ["auto:reliable"],
+    fallbacks: ["auto:reliable", "auto:elite"],
     notes: "Failover only for paid elite; actual model id is recorded.",
   },
   frontier: {
     primary: "auto:smart",
-    fallbacks: ["auto:reliable"],
+    fallbacks: ["auto:reliable", "auto:frontier"],
     notes: "Failover only for frontier; never silent about the routed model.",
   },
 };
@@ -65,6 +67,48 @@ function isPlaceholder(modelId: string): boolean {
     modelId.toUpperCase().startsWith("TBD") ||
     modelId.toUpperCase().startsWith("PLACEHOLDER")
   );
+}
+
+export function aliasRank(alias: ModelAlias): number {
+  return ALIAS_RANK[alias];
+}
+
+/**
+ * Rank of a FreeLLM model id. Documented `auto:fast`/`auto` are standard-tier.
+ * Unknown operator IDs are treated as same-tier (allowed; not silently weaker).
+ */
+export function modelIdRank(modelId: string): number | null {
+  const raw = modelId.trim().toLowerCase();
+  if (
+    raw === "auto:fast" ||
+    raw === "auto" ||
+    raw === "auto:balanced" ||
+    raw === "auto:standard"
+  ) {
+    return 0;
+  }
+  const match = /^auto:(advanced|expert|elite|frontier)$/.exec(raw);
+  if (match) {
+    return ALIAS_RANK[match[1] as ModelAlias];
+  }
+  return null;
+}
+
+export function filterSameTierOrBetter(
+  alias: ModelAlias,
+  modelIds: readonly string[],
+): string[] {
+  const min = ALIAS_RANK[alias];
+  return modelIds.filter((id) => {
+    if (isPlaceholder(id)) {
+      return false;
+    }
+    const rank = modelIdRank(id);
+    if (rank === null) {
+      return true;
+    }
+    return rank >= min;
+  });
 }
 
 export type FreellmAliasResolution = {
@@ -93,8 +137,20 @@ export function resolveFreellmAlias(input: AliasInput): FreellmAliasResolution {
     });
   }
 
-  const uniqueFallbacks = fallbacks.filter(
-    (id) => id !== primary && !isPlaceholder(id),
+  const primaryRank = modelIdRank(primary);
+  if (primaryRank !== null && primaryRank < ALIAS_RANK[alias]) {
+    throw new ProviderError({
+      provider: "freellm",
+      message:
+        `FreeLLM alias "${alias}" cannot use a weaker profile (${primary}). Same-tier-or-better only.`,
+      code: "alias_unresolved",
+      status: 503,
+    });
+  }
+
+  const uniqueFallbacks = filterSameTierOrBetter(
+    alias,
+    fallbacks.filter((id) => id !== primary && !isPlaceholder(id)),
   );
 
   return {
@@ -109,4 +165,12 @@ export function resolveFreellmAlias(input: AliasInput): FreellmAliasResolution {
 export function modelsForFreellmAlias(input: AliasInput): string[] {
   const resolved = resolveFreellmAlias(input);
   return [resolved.modelId, ...resolved.fallbacks];
+}
+
+export function profileForAlias(alias: ModelAlias): string {
+  return SNAPSHOT[alias].primary;
+}
+
+export function normalizeFreellmAlias(input: AliasInput): ModelAlias {
+  return normalizeAlias(input);
 }

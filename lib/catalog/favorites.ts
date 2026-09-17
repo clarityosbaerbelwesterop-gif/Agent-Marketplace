@@ -9,6 +9,7 @@ const listColumns = {
   name: agentProfiles.name,
   description: agentProfiles.description,
   category: agentProfiles.category,
+  family: agentProfiles.family,
   specializations: agentProfiles.specializations,
   languages: agentProfiles.languages,
   tier: agentProfiles.tier,

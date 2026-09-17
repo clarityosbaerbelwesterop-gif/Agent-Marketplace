@@ -17,15 +17,16 @@ export function MarketplaceFilters({
   query: ParsedAgentsQuery;
   compare: string[];
 }) {
-  const categories = query.group
-    ? CATEGORY_GROUP_MEMBERS[query.group]
+  const group = query.group ?? query.family;
+  const categories = group
+    ? CATEGORY_GROUP_MEMBERS[group]
     : AGENT_CATEGORIES;
 
   return (
     <form
       action="/marketplace"
       method="get"
-      className="grid gap-4 rounded-[var(--radius-lg)] border border-border bg-surface p-4 md:grid-cols-2 lg:grid-cols-6"
+      className="grid gap-4 rounded-[var(--radius-lg)] border border-border bg-surface p-4 md:grid-cols-2 lg:grid-cols-7"
       aria-label="Marktplatz filtern"
     >
       {compare.length > 0 ? (
@@ -43,12 +44,12 @@ export function MarketplaceFilters({
         />
       </Field>
 
-      <Field id="group" label="Gruppe">
-        <Select id="group" name="group" defaultValue={query.group ?? ""}>
+      <Field id="group" label="Gruppe / Familie">
+        <Select id="group" name="group" defaultValue={group ?? ""}>
           <option value="">Alle</option>
-          {AGENT_CATEGORY_GROUPS.map((group) => (
-            <option key={group} value={group}>
-              {GROUP_LABELS[group]}
+          {AGENT_CATEGORY_GROUPS.map((item) => (
+            <option key={item} value={item}>
+              {GROUP_LABELS[item]}
             </option>
           ))}
         </Select>

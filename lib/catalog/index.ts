@@ -5,6 +5,12 @@ export {
   CATEGORY_GROUP_MEMBERS,
   categoryGroupFor,
 } from "./groups";
+export {
+  AGENT_FAMILIES,
+  familyFromCategory,
+  categoriesForFamily,
+  isAgentFamily,
+} from "./family";
 export { parseAgentsQuery } from "./parse-query";
 export { compareAgents, parseCompareSlugs } from "./compare";
 export { getAgentBySlug, isDatabaseConfigured, listAgents } from "./queries";

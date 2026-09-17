@@ -1,7 +1,7 @@
 import { isPaidModelAlias, modelsForAlias } from "@/lib/unorouter/aliases";
 import type { ModelAlias } from "@/lib/unorouter/types";
 import { isUnorouterConfigured } from "@/lib/unorouter/config";
-import { isFreellmConfigured } from "@/lib/freellm/config";
+import { isFreellmConfigured, isFreellmPreferred } from "@/lib/freellm/config";
 import { modelsForFreellmAlias } from "@/lib/freellm/aliases";
 import type { ProviderId } from "./errors";
 
@@ -73,7 +73,8 @@ export function buildModelRoute(input: {
   const freellmConfigured = isFreellmConfigured();
   const highVolume = isHighVolumeUsage(input);
   const paid = isPaidModelAlias(input.alias);
-  const preferUnorouter = paid || unorouterConfigured;
+  const freellmFirst = isFreellmPreferred() && freellmConfigured;
+  const preferUnorouter = !freellmFirst && (paid || unorouterConfigured);
   const candidates: RouteCandidate[] = [];
 
   const unorouterModels = unorouterConfigured ? modelsForAlias(input.alias) : [];
@@ -96,8 +97,9 @@ export function buildModelRoute(input: {
       : highVolume
         ? "high_volume"
         : "failover";
-    const insertAt =
-      unorouterConfigured && highVolume && unorouterModels.length > 0
+    const insertAt = freellmFirst
+      ? 0
+      : unorouterConfigured && highVolume && unorouterModels.length > 0
         ? 1
         : candidates.length;
     const freellmCandidates: RouteCandidate[] = freellmModels.map((modelId, index) => ({

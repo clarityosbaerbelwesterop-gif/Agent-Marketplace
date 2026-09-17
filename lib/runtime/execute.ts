@@ -6,10 +6,16 @@ import {
   isProviderError,
   type RouteCandidate,
 } from "@/lib/llm";
-import { buildSystemPrompt, resultCheckPrompt } from "./skills";
+import { buildSystemPrompt, groundingCheckNotes, resultCheckPrompt } from "./skills";
 import { createQueuedRun, updateRun, addUsageToRental, claimQueuedRun, assertRunStillOpen, RunCanceledError } from "./runs";
 import { writeMemory } from "./memory";
+import { drainSkillLearningQueue, enqueueSkillLearning, listNetworkSummaries } from "./network";
 import { executeRuntimeTool, runtimeTools } from "./tools";
+import {
+  continuationUserMessage,
+  isLengthFinish,
+  MAX_CONTINUATIONS,
+} from "./capacity";
 import { TIER_RUNTIME_POLICY, type RuntimeContext, type RuntimeEvent } from "./types";
 
 function addUsage(left: ChatUsage | null, right: ChatUsage | null): ChatUsage | null {
@@ -59,6 +65,7 @@ async function streamAssistant(input: {
   let lastError: unknown;
   for (const candidate of input.candidates) {
     const { stream } = chatFns(candidate.provider);
+    let yielded = false;
     try {
       let text = "";
       let toolCalls: ChatToolCall[] | undefined;
@@ -73,6 +80,7 @@ async function streamAssistant(input: {
         topP: input.topP,
         maxOutputTokens: input.maxOutputTokens,
       })) {
+        yielded = true;
         if (chunk.type === "text") {
           text += chunk.text;
           await input.onText?.(chunk.text);
@@ -101,7 +109,7 @@ async function streamAssistant(input: {
       };
     } catch (error) {
       lastError = error;
-      if (!isFailoverError(error)) {
+      if (yielded || !isFailoverError(error)) {
         throw error;
       }
     }
@@ -116,6 +124,10 @@ async function checkOutput(
   candidates: RouteCandidate[],
   outputText: string,
 ): Promise<{ pass: boolean; notes: string }> {
+  const grounded = groundingCheckNotes(outputText);
+  if (grounded) {
+    return { pass: false, notes: grounded };
+  }
   if (!context.skill) {
     return { pass: true, notes: "no skill package" };
   }
@@ -231,6 +243,26 @@ export async function executeTurn(
         ? `${grant.provider} (credentials stored)`
         : `${grant.provider} (granted, no credentials)`,
     );
+  let networkSummary: string | undefined;
+  try {
+    const mesh = await listNetworkSummaries(
+      context.userId,
+      context.rental.workspaceId,
+      8,
+    );
+    if (mesh.nodes.length > 0) {
+      networkSummary = [
+        "Workspace shared-agent network summaries (not full transcripts, workspace-scoped only):",
+        ...mesh.nodes.map(
+          (node) =>
+            `- [${node.verified ? "verified" : "unverified"} ${node.publisherTier}] ${node.title}: ${node.summary}`,
+        ),
+      ].join("\n");
+    }
+  } catch {
+    networkSummary = undefined;
+  }
+
   const system = buildSystemPrompt({
     agentName: context.agent.name,
     agentDescription: context.agent.description,
@@ -241,6 +273,8 @@ export async function executeTurn(
       activeConnectors.length > 0
         ? `Active connector grants: ${activeConnectors.join(", ")}.`
         : "No active connector grants. Connector tools are unavailable until the user connects one.",
+    networkSummary,
+    extraInstructions: context.extraInstructions,
   });
 
   const messages: ChatMessage[] = [
@@ -257,6 +291,7 @@ export async function executeTurn(
   let outputText = "";
   let checkNotes: string | null = null;
   let toolRoundCount = 0;
+  let continuationCount = 0;
 
   try {
     let attempt = 0;
@@ -289,7 +324,34 @@ export async function executeTurn(
 
         const toolCalls = result.message.tool_calls ?? [];
         if (toolCalls.length === 0) {
-          outputText = result.message.content ?? "";
+          outputText += result.message.content ?? "";
+          if (
+            isLengthFinish(result.finishReason) &&
+            continuationCount < MAX_CONTINUATIONS
+          ) {
+            continuationCount += 1;
+            await updateRun(context.userId, run.id, {
+              status: "running",
+              modelIdUsed,
+              providerUsed,
+              output: {
+                text: outputText,
+                continuationCount,
+                finishReason: result.finishReason,
+              },
+              usage,
+            });
+            await emit({
+              type: "continue",
+              reason: result.finishReason,
+              count: continuationCount,
+            });
+            messages.push({
+              role: "user",
+              content: continuationUserMessage(outputText),
+            });
+            continue;
+          }
           break;
         }
 
@@ -373,6 +435,7 @@ export async function executeTurn(
       routeRole,
       downgradedFromPaid,
       alias: context.alias,
+      continuationCount,
     };
     const finished = await updateRun(context.userId, run.id, {
       status: "succeeded",
@@ -396,6 +459,17 @@ export async function executeTurn(
       visibility: "workspace",
       content: `[${context.agent.name}] User: ${message}\nAssistant: ${outputText.slice(0, 4000)}`,
     });
+    void enqueueSkillLearning({
+      userId: context.userId,
+      workspaceId: context.rental.workspaceId,
+      sessionId: context.session.id,
+      rentalId: context.rental.id,
+      agentProfileId: context.agent.id,
+      publisherTier: context.agent.tier,
+      summary: outputText,
+    }).then(() =>
+      drainSkillLearningQueue(context.userId, context.rental.workspaceId),
+    );
     await emit({
       type: "done",
       usage,

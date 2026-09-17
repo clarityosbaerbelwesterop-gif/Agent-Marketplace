@@ -63,7 +63,7 @@ export default async function MarketplacePage({
   ).filter((agent): agent is AgentDetail => Boolean(agent));
 
   const hasFilters = Boolean(
-    parsed.search || parsed.category || parsed.group || parsed.tier,
+    parsed.search || parsed.category || parsed.group || parsed.family || parsed.tier,
   );
 
   return (

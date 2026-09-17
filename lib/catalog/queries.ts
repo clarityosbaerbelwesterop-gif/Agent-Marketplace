@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { agentProfiles, agentSkills } from "@/lib/db/schema";
 import type { ParsedAgentsQuery } from "./parse-query";
 import type { AgentTier } from "./constants";
+import { categoriesForFamily } from "./family";
 import { categoriesForGroup, categoryGroupFor } from "./groups";
 import type {
   AgentDetail,
@@ -17,6 +18,7 @@ const listColumns = {
   name: agentProfiles.name,
   description: agentProfiles.description,
   category: agentProfiles.category,
+  family: agentProfiles.family,
   specializations: agentProfiles.specializations,
   languages: agentProfiles.languages,
   tier: agentProfiles.tier,
@@ -34,6 +36,14 @@ function catalogWhere(query: ParsedAgentsQuery): SQL | undefined {
 
   if (query.category) {
     parts.push(eq(agentProfiles.category, query.category));
+  } else if (query.family) {
+    const categories = categoriesForFamily(query.family);
+    parts.push(
+      or(
+        eq(agentProfiles.family, query.family),
+        inArray(agentProfiles.category, [...categories]),
+      )!,
+    );
   } else if (query.group) {
     parts.push(inArray(agentProfiles.category, [...categoriesForGroup(query.group)]));
   }
@@ -123,6 +133,7 @@ export async function listAgents(
       search: query.search,
       category: query.category,
       group: query.group,
+      family: query.family,
       tier: query.tier,
     },
   };
@@ -185,6 +196,7 @@ export async function getAgentBySlug(slug: string): Promise<AgentDetail | null> 
     description: profile.description,
     category: profile.category,
     categoryGroup: categoryGroupFor(profile.category),
+    family: profile.family,
     specializations: profile.specializations,
     languages: profile.languages,
     tier: profile.tier,
