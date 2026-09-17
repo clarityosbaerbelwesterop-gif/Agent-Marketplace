@@ -2,7 +2,7 @@
  * Documented public sources for MCP server *catalog* discovery.
  *
  * Discovery never installs, grants, or executes remote code. Runtime grants
- * stay limited to the first-wave eight in `lib/connectors/registry.ts`.
+ * stay limited to the first-wave registry in `lib/connectors/registry.ts`.
  */
 export const DISCOVERY_FETCH_TIMEOUT_MS = 4_000;
 

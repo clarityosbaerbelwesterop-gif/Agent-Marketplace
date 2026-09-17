@@ -9,13 +9,14 @@ type ChatRun = {
   modelIdUsed: string | null;
   skillVersion: string | null;
   input: { message?: unknown } | null;
-  output: { text?: unknown; error?: unknown } | null;
+  output: { text?: unknown; error?: unknown; agentName?: unknown } | null;
 };
 
 type ChatMessageView = {
   id: string;
   role: "user" | "assistant" | "system";
   text: string;
+  agentName?: string;
 };
 
 function messagesFromRuns(runs: ChatRun[]): ChatMessageView[] {
@@ -23,12 +24,22 @@ function messagesFromRuns(runs: ChatRun[]): ChatMessageView[] {
   for (const run of runs) {
     const input = run.input?.message;
     if (typeof input === "string" && input.trim()) {
-      items.push({ id: `${run.id}-user`, role: "user", text: input });
+      const last = items[items.length - 1];
+      if (!(last?.role === "user" && last.text === input)) {
+        items.push({ id: `${run.id}-user`, role: "user", text: input });
+      }
     }
     const output = run.output?.text;
     const error = run.output?.error;
+    const agentName =
+      typeof run.output?.agentName === "string" ? run.output.agentName : undefined;
     if (typeof output === "string" && output.trim()) {
-      items.push({ id: `${run.id}-assistant`, role: "assistant", text: output });
+      items.push({
+        id: `${run.id}-assistant`,
+        role: "assistant",
+        text: output,
+        agentName,
+      });
     } else if (typeof error === "string" && error.trim()) {
       items.push({
         id: `${run.id}-error`,
@@ -45,11 +56,13 @@ export function ChatClient({
   sessionId,
   agentName,
   initialRuns,
+  groupMembers = [],
 }: {
-  rentalId: string;
+  rentalId: string | null;
   sessionId: string;
   agentName: string;
   initialRuns: ChatRun[];
+  groupMembers?: Array<{ rentalId: string; agentName: string }>;
 }) {
   const [runs, setRuns] = useState(initialRuns);
   const [draft, setDraft] = useState("");
@@ -60,6 +73,8 @@ export function ChatClient({
   const [modelId, setModelId] = useState<string | null>(
     initialRuns.at(-1)?.modelIdUsed ?? null,
   );
+  const [provider, setProvider] = useState<string | null>(null);
+  const isGroup = groupMembers.length > 0;
 
   const messages = useMemo(() => {
     const items = messagesFromRuns(runs);
@@ -96,7 +111,7 @@ export function ChatClient({
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          rentalId,
+          rentalId: rentalId ?? undefined,
           sessionId,
           message,
           background,
@@ -135,6 +150,7 @@ export function ChatClient({
       let assembled = "";
       let runId: string | null = null;
       let usedModel: string | null = null;
+      const finished: ChatRun[] = [];
 
       const applyEvent = (rawEvent: string) => {
         const lines = rawEvent.split("\n");
@@ -158,11 +174,18 @@ export function ChatClient({
           runId?: string;
           modelId?: string;
           modelIdUsed?: string;
+          provider?: string;
+          providerUsed?: string;
           outputText?: string;
+          agentName?: string;
+          downgradedFromPaid?: boolean;
         };
         if (eventName === "meta" || data.type === "meta") {
           runId = data.runId ?? runId;
           usedModel = data.modelId ?? usedModel;
+          if (data.provider) {
+            setProvider(data.provider);
+          }
         }
         if (eventName === "delta" || data.type === "delta") {
           assembled += data.text ?? "";
@@ -171,6 +194,20 @@ export function ChatClient({
         if (eventName === "done" || data.type === "done") {
           assembled = data.outputText || assembled;
           usedModel = data.modelIdUsed ?? usedModel;
+          if (data.providerUsed) {
+            setProvider(data.providerUsed);
+          }
+          finished.push({
+            id: runId ?? `local-asst-${finished.length}`,
+            status: assembled ? "succeeded" : "failed",
+            modelIdUsed: usedModel,
+            skillVersion: null,
+            input: { message },
+            output: assembled
+              ? { text: assembled, agentName: data.agentName }
+              : { error: "empty response" },
+          });
+          assembled = "";
           setStreaming("");
         }
         if (eventName === "error" || data.type === "error") {
@@ -195,14 +232,24 @@ export function ChatClient({
       setModelId(usedModel);
       setRuns((current) => {
         const next = current.filter((row) => !row.id.startsWith("local-"));
-        if (runId) {
+        next.push({
+          id: `local-user-${Date.now()}`,
+          status: "succeeded",
+          modelIdUsed: usedModel,
+          skillVersion: null,
+          input: { message },
+          output: null,
+        });
+        if (finished.length > 0) {
+          next.push(...finished);
+        } else if (assembled) {
           next.push({
-            id: runId,
-            status: assembled ? "succeeded" : "failed",
+            id: runId ?? `local-asst-${Date.now()}`,
+            status: "succeeded",
             modelIdUsed: usedModel,
             skillVersion: null,
             input: { message },
-            output: assembled ? { text: assembled } : { error: "empty response" },
+            output: { text: assembled },
           });
         }
         return next;
@@ -218,12 +265,20 @@ export function ChatClient({
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted">
-        Chatting with {agentName}. Runs persist in Postgres so work can finish
-        after the tab closes.
+        {isGroup
+          ? `Gruppensitzung mit ${groupMembers.map((member) => member.agentName).join(", ")}. Jede bezahlte Miete antwortet der Reihe nach.`
+          : `Chat mit ${agentName}.`}{" "}
+        Runs bleiben in Postgres, damit die Arbeit nach dem Tab-Close weiterlaufen kann.
         {modelId ? (
           <>
             {" "}
             Last model: <code className="font-mono text-xs">{modelId}</code>
+            {provider ? (
+              <>
+                {" "}
+                via <code className="font-mono text-xs">{provider}</code>
+              </>
+            ) : null}
           </>
         ) : null}
       </p>
@@ -235,10 +290,10 @@ export function ChatClient({
             <li key={item.id} className="text-sm leading-relaxed">
               <span className="font-medium">
                 {item.role === "user"
-                  ? "You"
+                  ? "Sie"
                   : item.role === "system"
                     ? "System"
-                    : agentName}
+                    : item.agentName ?? agentName}
               </span>
               <p className="whitespace-pre-wrap text-muted">{item.text}</p>
             </li>
@@ -277,16 +332,25 @@ export function ChatClient({
           {busy ? "Running…" : "Send"}
         </button>
       </form>
-      <p className="text-sm text-muted">
-        <Link
-          className="underline underline-offset-4"
-          href={`/connectors?rentalId=${rentalId}`}
-        >
-          Konnektoren
-        </Link>{" "}
-        für diese Miete (Neon, GitHub, Slack, Vercel, Supabase, Render, Stripe,
-        Cursor). Der Agent bekommt nur Tools für aktive Grants.
-      </p>
+      {rentalId ? (
+        <p className="text-sm text-muted">
+          <Link
+            className="underline underline-offset-4"
+            href={`/connectors?rentalId=${rentalId}`}
+          >
+            Konnektoren
+          </Link>{" "}
+          für diese Miete (Neon, GitHub, Slack, Vercel, Supabase, Render, Stripe,
+          Cursor, Higgsfield, LinkedIn, Meta, Google Search). Der Agent bekommt
+          nur Tools für aktive Grants.
+        </p>
+      ) : (
+        <p className="text-sm text-muted">
+          Konnektoren bleiben pro Miete. Öffnen Sie die Grant-Seite eines
+          Mitglieds, um Higgsfield, LinkedIn, Meta, Google Search oder die
+          übrigen First-Wave-Provider zu verbinden.
+        </p>
+      )}
     </div>
   );
 }

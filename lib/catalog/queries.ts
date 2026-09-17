@@ -1,8 +1,9 @@
-import { and, asc, count, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { agentProfiles, agentSkills } from "@/lib/db/schema";
 import type { ParsedAgentsQuery } from "./parse-query";
 import type { AgentTier } from "./constants";
+import { categoriesForGroup, categoryGroupFor } from "./groups";
 import type {
   AgentDetail,
   AgentListItem,
@@ -33,6 +34,8 @@ function catalogWhere(query: ParsedAgentsQuery): SQL | undefined {
 
   if (query.category) {
     parts.push(eq(agentProfiles.category, query.category));
+  } else if (query.group) {
+    parts.push(inArray(agentProfiles.category, [...categoriesForGroup(query.group)]));
   }
   if (query.tier) {
     parts.push(eq(agentProfiles.tier, query.tier as AgentTier));
@@ -107,7 +110,10 @@ export async function listAgents(
   const rows = where ? await listQuery.where(where) : await listQuery;
 
   return {
-    items: rows as AgentListItem[],
+    items: (rows as AgentListItem[]).map((item) => ({
+      ...item,
+      categoryGroup: categoryGroupFor(item.category),
+    })),
     page,
     pageSize: query.pageSize,
     total,
@@ -116,6 +122,7 @@ export async function listAgents(
     filters: {
       search: query.search,
       category: query.category,
+      group: query.group,
       tier: query.tier,
     },
   };
@@ -177,6 +184,7 @@ export async function getAgentBySlug(slug: string): Promise<AgentDetail | null> 
     name: profile.name,
     description: profile.description,
     category: profile.category,
+    categoryGroup: categoryGroupFor(profile.category),
     specializations: profile.specializations,
     languages: profile.languages,
     tier: profile.tier,

@@ -1,29 +1,19 @@
 import { createOpenAiCompatClient } from "@/lib/llm/openai-compat";
+import type { ChatRequest, ChatResult } from "@/lib/unorouter/types";
 import { isFailoverError } from "@/lib/llm/errors";
 import {
-  assertToolsSupported,
-  estimateCostUsd,
-  rememberLiveModel,
-  samplingForModel,
-} from "./capabilities";
-import {
-  getMaxRetries,
-  getRequestTimeoutMs,
-  getUnorouterApiKey,
-  getUnorouterBaseUrl,
+  getFreellmApiKey,
+  getFreellmBaseUrl,
+  getFreellmMaxRetries,
+  getFreellmTimeoutMs,
 } from "./config";
-import type { ChatRequest, ChatResult } from "./types";
 
 const client = createOpenAiCompatClient({
-  provider: "unorouter",
-  getBaseUrl: getUnorouterBaseUrl,
-  getApiKey: getUnorouterApiKey,
-  getTimeoutMs: getRequestTimeoutMs,
-  getMaxRetries: getMaxRetries,
-  estimateCostUsd,
-  assertToolsSupported,
-  samplingForModel,
-  rememberLiveModel,
+  provider: "freellm",
+  getBaseUrl: getFreellmBaseUrl,
+  getApiKey: getFreellmApiKey,
+  getTimeoutMs: getFreellmTimeoutMs,
+  getMaxRetries: getFreellmMaxRetries,
 });
 
 export const listModels = client.listModels;
@@ -47,5 +37,3 @@ export async function chatWithFallback(
   }
   throw lastError;
 }
-
-export type { ChatMessage } from "./types";

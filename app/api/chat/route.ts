@@ -1,10 +1,13 @@
 import { after } from "next/server";
 import { jsonError, readJsonBody, requireApiUser } from "@/lib/api/guard";
 import { isUnorouterConfigured } from "@/lib/unorouter";
-import { UNOROUTER_TOKEN_URL } from "@/lib/unorouter/config";
+import { isFreellmConfigured } from "@/lib/freellm";
+import { modelRoutingUnavailableMessage } from "@/lib/llm";
 import {
   createSseStream,
+  executeGroupTurn,
   executeTurn,
+  getSessionForUser,
   loadRuntimeContext,
   sseHeaders,
 } from "@/lib/runtime";
@@ -36,20 +39,58 @@ export async function POST(request: Request) {
     return jsonError("message is required", 400);
   }
 
+  if (!isUnorouterConfigured() && !isFreellmConfigured()) {
+    return jsonError(modelRoutingUnavailableMessage(), 503);
+  }
+
+  const sessionId =
+    typeof payload.sessionId === "string" ? payload.sessionId : undefined;
+  if (sessionId) {
+    const session = await getSessionForUser(auth.userId, sessionId);
+    if (session?.kind === "group") {
+      const background = payload.background === true;
+      if (background) {
+        const work = executeGroupTurn({
+          userId: auth.userId,
+          sessionId,
+          message,
+          emit: async () => undefined,
+        });
+        after(() => work);
+        return Response.json({
+          background: true,
+          sessionId,
+          kind: "group",
+          status: "queued",
+        });
+      }
+      const { stream, done } = createSseStream(async (emit) => {
+        const result = await executeGroupTurn({
+          userId: auth.userId,
+          sessionId,
+          message,
+          emit,
+        });
+        if (!result.ok) {
+          await emit({ type: "error", message: result.error, code: "group_chat" });
+        }
+      });
+      after(() => done);
+      return new Response(stream, { headers: sseHeaders() });
+    }
+  }
+
   const context = await loadRuntimeContext({
     userId: auth.userId,
     rentalId: typeof payload.rentalId === "string" ? payload.rentalId : undefined,
-    sessionId: typeof payload.sessionId === "string" ? payload.sessionId : undefined,
+    sessionId,
   });
   if (!context.ok) {
     return jsonError(context.error, context.status);
   }
 
-  if (!isUnorouterConfigured()) {
-    return jsonError(
-      `UNOROUTER_API_KEY is not set. Create a key at ${UNOROUTER_TOKEN_URL} and set UNOROUTER_API_KEY.`,
-      503,
-    );
+  if (context.data.route.length === 0) {
+    return jsonError(modelRoutingUnavailableMessage(), 503);
   }
 
   const background = payload.background === true;
@@ -63,7 +104,6 @@ export async function POST(request: Request) {
       }
     });
     after(() => work);
-    // Give meta a tick so the client can poll.
     await Promise.race([
       work.then(() => undefined),
       new Promise((resolve) => setTimeout(resolve, 50)),

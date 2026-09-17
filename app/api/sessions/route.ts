@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { jsonError, readJsonBody, requireApiUser } from "@/lib/api/guard";
-import { getOrCreateOpenSession } from "@/lib/runtime/runs";
+import {
+  createGroupSession,
+  getOrCreateOpenSession,
+  serializeSession,
+} from "@/lib/runtime";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +21,37 @@ export async function POST(request: Request) {
   if (!body || typeof body !== "object") {
     return jsonError("Invalid JSON", 400);
   }
-  const payload = body as { rentalId?: unknown; sessionId?: unknown };
+  const payload = body as {
+    rentalId?: unknown;
+    sessionId?: unknown;
+    kind?: unknown;
+    rentalIds?: unknown;
+  };
+
+  if (payload.kind === "group") {
+    const rentalIds = Array.isArray(payload.rentalIds)
+      ? payload.rentalIds.map((id) => String(id))
+      : [];
+    const result = await createGroupSession({
+      userId: auth.userId,
+      rentalIds,
+    });
+    if (!result.ok) {
+      return jsonError(result.error, result.status);
+    }
+    return NextResponse.json({
+      session: serializeSession(result.data.session, {
+        members: result.data.members.map((member) => ({
+          rentalId: member.rentalId,
+          agentName: member.agentName,
+          agentSlug: member.agentSlug,
+          agentTier: member.agentTier,
+          active: true,
+        })),
+      }),
+    });
+  }
+
   const rentalId = String(payload.rentalId ?? "");
   if (!rentalId) {
     return jsonError("rentalId is required", 400);
@@ -31,13 +65,6 @@ export async function POST(request: Request) {
     return jsonError(result.error, result.status);
   }
   return NextResponse.json({
-    session: {
-      id: result.data.session.id,
-      rentalId: result.data.session.rentalId,
-      workspaceId: result.data.session.workspaceId,
-      status: result.data.session.status,
-      openedAt: result.data.session.openedAt.toISOString(),
-      closedAt: result.data.session.closedAt?.toISOString() ?? null,
-    },
+    session: serializeSession(result.data.session),
   });
 }

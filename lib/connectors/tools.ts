@@ -3,7 +3,7 @@ import type { ConnectorCredentials } from "@/lib/db/json";
 import { CONNECTOR_REGISTRY, isConnectorId } from "./registry";
 import { getConnectorGrantWithSecrets } from "./grants";
 import { hasStoredCredentials, isActiveGrant } from "./status";
-import type { ConnectorId, PublicConnectorGrant } from "./types";
+import type { PublicConnectorGrant } from "./types";
 
 function notConnected(code: string, message: string) {
   return JSON.stringify({
@@ -29,6 +29,10 @@ function bearer(credentials: ConnectorCredentials | null): string | null {
     "STRIPE_SECRET_KEY",
     "CURSOR_API_KEY",
     "SUPABASE_SERVICE_ROLE_KEY",
+    "HIGGSFIELD_API_KEY",
+    "LINKEDIN_ACCESS_TOKEN",
+    "META_ACCESS_TOKEN",
+    "GOOGLE_SEARCH_API_KEY",
   ]) {
     const value = keys[name]?.trim();
     if (value) {
@@ -247,13 +251,11 @@ export async function executeConnectorTool(input: {
   workspaceId: string;
   name: string;
 }): Promise<string> {
-  const match = /^(neon|github|slack|vercel|supabase|render|stripe|cursor)_(status|invoke)$/.exec(
-    input.name,
-  );
-  if (!match) {
+  const match = /^(.*)_(status|invoke)$/.exec(input.name);
+  if (!match || !isConnectorId(match[1])) {
     return JSON.stringify({ error: `Unknown connector tool "${input.name}"` });
   }
-  const provider = match[1] as ConnectorId;
+  const provider = match[1];
   const kind = match[2];
   const row = await getConnectorGrantWithSecrets({
     userId: input.userId,
@@ -332,6 +334,21 @@ export async function executeConnectorTool(input: {
     }
     if (provider === "cursor") {
       return JSON.stringify(await pingCursor());
+    }
+    if (
+      provider === "higgsfield" ||
+      provider === "linkedin" ||
+      provider === "meta" ||
+      provider === "google-search"
+    ) {
+      return JSON.stringify({
+        ok: true,
+        provider,
+        reachable: false,
+        code: "connector_stub",
+        message:
+          "Tenant credentials are stored. Live API ping is not wired for this grant stub. Do not invent resources.",
+      });
     }
   } catch (error) {
     return JSON.stringify({

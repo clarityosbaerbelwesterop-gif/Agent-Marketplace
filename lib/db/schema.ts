@@ -94,6 +94,11 @@ export const agentSessionStatusEnum = pgEnum("agent_session_status", [
   "closed",
 ]);
 
+export const agentSessionKindEnum = pgEnum("agent_session_kind", [
+  "solo",
+  "group",
+]);
+
 export const agentRunStatusEnum = pgEnum("agent_run_status", [
   "queued",
   "running",
@@ -107,6 +112,11 @@ export const memoryKindEnum = pgEnum("memory_kind", [
   "transcript",
   "fact",
   "preference",
+]);
+
+export const memoryVisibilityEnum = pgEnum("memory_visibility", [
+  "user",
+  "workspace",
 ]);
 
 export const connectorGrantStatusEnum = pgEnum("connector_grant_status", [
@@ -440,6 +450,7 @@ export const agentSessions = pgTable(
     workspaceId: uuid("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
+    kind: agentSessionKindEnum("kind").notNull().default("solo"),
     status: agentSessionStatusEnum("status").notNull().default("open"),
     openedAt: timestamp("opened_at", { withTimezone: true })
       .defaultNow()
@@ -453,6 +464,7 @@ export const agentSessions = pgTable(
       table.status,
     ),
     index("agent_sessions_workspace_id_idx").on(table.workspaceId),
+    index("agent_sessions_kind_status_idx").on(table.kind, table.status),
     pgPolicy("agent_sessions_select", {
       for: "select",
       to: authenticatedRole,
@@ -477,6 +489,52 @@ export const agentSessions = pgTable(
   ],
 ).enableRLS();
 
+/**
+ * Group-chat membership. Solo sessions have a single host rental_id on
+ * agent_sessions; group rooms also list every paid rental that may speak.
+ * RLS follows session visibility (which includes member rentals).
+ */
+export const agentSessionMembers = pgTable(
+  "agent_session_members",
+  {
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => agentSessions.id, { onDelete: "cascade" }),
+    rentalId: uuid("rental_id")
+      .notNull()
+      .references(() => rentals.id, { onDelete: "cascade" }),
+    ...timestamps,
+  },
+  (table) => [
+    primaryKey({
+      name: "agent_session_members_pkey",
+      columns: [table.sessionId, table.rentalId],
+    }),
+    index("agent_session_members_rental_id_idx").on(table.rentalId),
+    pgPolicy("agent_session_members_select", {
+      for: "select",
+      to: authenticatedRole,
+      using: isSessionVisible(table.sessionId),
+    }),
+    pgPolicy("agent_session_members_insert", {
+      for: "insert",
+      to: authenticatedRole,
+      withCheck: sql`${isSessionVisible(table.sessionId)} and ${isRentalVisible(table.rentalId)}`,
+    }),
+    pgPolicy("agent_session_members_update", {
+      for: "update",
+      to: authenticatedRole,
+      using: isSessionVisible(table.sessionId),
+      withCheck: sql`${isSessionVisible(table.sessionId)} and ${isRentalVisible(table.rentalId)}`,
+    }),
+    pgPolicy("agent_session_members_delete", {
+      for: "delete",
+      to: authenticatedRole,
+      using: isSessionVisible(table.sessionId),
+    }),
+  ],
+).enableRLS();
+
 export const agentRuns = pgTable(
   "agent_runs",
   {
@@ -486,6 +544,7 @@ export const agentRuns = pgTable(
       .references(() => agentSessions.id, { onDelete: "cascade" }),
     status: agentRunStatusEnum("status").notNull().default("queued"),
     modelIdUsed: text("model_id_used"),
+    providerUsed: text("provider_used"),
     skillVersion: text("skill_version"),
     input: jsonb("input")
       .$type<JsonObject>()
@@ -539,16 +598,38 @@ export const memories = pgTable(
       onDelete: "set null",
     }),
     kind: memoryKindEnum("kind").notNull().default("note"),
+    visibility: memoryVisibilityEnum("visibility").notNull().default("user"),
     content: text("content").notNull(),
     ...timestamps,
   },
   (table) => [
     index("memories_workspace_user_idx").on(table.workspaceId, table.userId),
     index("memories_session_id_idx").on(table.sessionId),
-    ...crudPolicies({
-      role: authenticatedRole,
-      read: sql`${authUserIdEq(table.userId)} and ${isWorkspaceMember(table.workspaceId)}`,
-      modify: sql`${authUserIdEq(table.userId)} and ${isWorkspaceMember(table.workspaceId)}`,
+    index("memories_workspace_visibility_created_idx").on(
+      table.workspaceId,
+      table.visibility,
+      table.createdAt,
+    ),
+    pgPolicy("memories_select", {
+      for: "select",
+      to: authenticatedRole,
+      using: sql`(${authUserIdEq(table.userId)} or ${table.visibility} = 'workspace') and ${isWorkspaceMember(table.workspaceId)}`,
+    }),
+    pgPolicy("memories_insert", {
+      for: "insert",
+      to: authenticatedRole,
+      withCheck: sql`${authUserIdEq(table.userId)} and ${isWorkspaceMember(table.workspaceId)}`,
+    }),
+    pgPolicy("memories_update", {
+      for: "update",
+      to: authenticatedRole,
+      using: sql`${authUserIdEq(table.userId)} and ${isWorkspaceMember(table.workspaceId)}`,
+      withCheck: sql`${authUserIdEq(table.userId)} and ${isWorkspaceMember(table.workspaceId)}`,
+    }),
+    pgPolicy("memories_delete", {
+      for: "delete",
+      to: authenticatedRole,
+      using: sql`${authUserIdEq(table.userId)} and ${isWorkspaceMember(table.workspaceId)}`,
     }),
   ],
 ).enableRLS();
@@ -638,6 +719,7 @@ export const rentalsRelations = relations(rentals, ({ one, many }) => ({
   }),
   sessions: many(agentSessions),
   payments: many(rentalPayments),
+  sessionMemberships: many(agentSessionMembers),
 }));
 
 export const rentalPaymentsRelations = relations(rentalPayments, ({ one }) => ({
@@ -667,6 +749,21 @@ export const agentSessionsRelations = relations(
     }),
     runs: many(agentRuns),
     memories: many(memories),
+    members: many(agentSessionMembers),
+  }),
+);
+
+export const agentSessionMembersRelations = relations(
+  agentSessionMembers,
+  ({ one }) => ({
+    session: one(agentSessions, {
+      fields: [agentSessionMembers.sessionId],
+      references: [agentSessions.id],
+    }),
+    rental: one(rentals, {
+      fields: [agentSessionMembers.rentalId],
+      references: [rentals.id],
+    }),
   }),
 );
 

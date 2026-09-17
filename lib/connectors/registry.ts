@@ -105,6 +105,54 @@ export const CONNECTOR_REGISTRY: Record<ConnectorId, ConnectorDefinition> = {
     authKind: "api_key",
     oauth: null,
   },
+  higgsfield: {
+    id: "higgsfield",
+    displayName: "Higgsfield",
+    description:
+      "Higgsfield media generation for this rental. Catalog + grant stub only; no OAuth app is wired.",
+    requiredScopes: [],
+    envSecretNames: [],
+    tenantSecretNames: ["HIGGSFIELD_API_KEY"],
+    capabilityTags: ["ai", "media"],
+    authKind: "api_key",
+    oauth: null,
+  },
+  linkedin: {
+    id: "linkedin",
+    displayName: "LinkedIn",
+    description:
+      "LinkedIn profile and posting APIs for this rental. Grant stub only; paste a tenant token. No fake OAuth.",
+    requiredScopes: ["r_liteprofile"],
+    envSecretNames: [],
+    tenantSecretNames: ["LINKEDIN_ACCESS_TOKEN"],
+    capabilityTags: ["social"],
+    authKind: "api_key",
+    oauth: null,
+  },
+  meta: {
+    id: "meta",
+    displayName: "Meta / Meta Ads",
+    description:
+      "Meta Graph and Ads APIs for this rental. Grant stub only; paste a tenant token. No fake OAuth.",
+    requiredScopes: ["ads_read"],
+    envSecretNames: [],
+    tenantSecretNames: ["META_ACCESS_TOKEN"],
+    capabilityTags: ["ads", "social"],
+    authKind: "api_key",
+    oauth: null,
+  },
+  "google-search": {
+    id: "google-search",
+    displayName: "Google Search",
+    description:
+      "Programmable Search (Custom Search JSON API) for this rental. Grant stub only; no OAuth.",
+    requiredScopes: [],
+    envSecretNames: [],
+    tenantSecretNames: ["GOOGLE_SEARCH_API_KEY", "GOOGLE_SEARCH_CX"],
+    capabilityTags: ["search"],
+    authKind: "api_key",
+    oauth: null,
+  },
 };
 
 export const CONNECTOR_LIST: ConnectorDefinition[] = CONNECTOR_IDS.map(

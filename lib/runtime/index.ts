@@ -1,6 +1,7 @@
 export { loadRuntimeContext, connectorsForContext } from "./context";
 export { executeTurn } from "./execute";
-export { listMemories, writeMemory } from "./memory";
+export { executeGroupTurn } from "./group";
+export { listMemories, writeMemory, serializeMemory } from "./memory";
 export {
   createRentalCheckout,
   endRental,
@@ -20,6 +21,12 @@ export {
   getRunForUser,
   serializeRun,
 } from "./runs";
+export {
+  createGroupSession,
+  listGroupMembers,
+  getSessionForUser,
+  serializeSession,
+} from "./rooms";
 export {
   listConnectorGrants,
   mergeConnectorStatus,

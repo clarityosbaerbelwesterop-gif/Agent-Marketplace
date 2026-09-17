@@ -1,4 +1,5 @@
 import type { AgentAvailability, AgentRatingStatus, AgentTier } from "@/lib/catalog/enums";
+import type { AgentCategoryGroup } from "@/lib/catalog/groups";
 
 export const TIER_LABELS: Record<AgentTier, string> = {
   standard: "Standard",
@@ -26,3 +27,10 @@ export const SORT_LABELS = {
   tier: "Stufe",
   updated: "Aktualisiert",
 } as const;
+
+export const GROUP_LABELS: Record<AgentCategoryGroup, string> = {
+  coding: "Coding",
+  marketing: "Marketing",
+  design: "Design",
+  sales: "Sales",
+};

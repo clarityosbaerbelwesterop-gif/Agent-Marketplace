@@ -1,6 +1,6 @@
 # Agent Marketplace
 
-Greenfield Next.js (App Router) app for a **rentable AI-agent marketplace**. Neon Auth, a paginated catalog API, a privileged ~10k agent seed, the UNOROUTER adapter, the agent runtime (sessions, runs, streaming chat), and Stripe Checkout + signed webhooks are wired. The UI layer styles that flow.
+Greenfield Next.js (App Router) app for a **rentable AI-agent marketplace**. Neon Auth, a paginated catalog API, a privileged ~10k agent seed, UNOROUTER plus optional FreeLLM failover, the agent runtime (sessions, group rooms, runs, streaming chat), and Stripe Checkout + signed webhooks are wired. The UI layer styles that flow.
 
 ## Stack
 
@@ -58,6 +58,7 @@ Copy `.env.example` to `.env.local`. Expected variables (fill from your own Neon
 - Neon Auth: `NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET`, `NEXT_PUBLIC_NEON_AUTH_URL`, `NEON_AUTH_JWKS_URL`
 - Stripe: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` (webhook: `POST /api/webhooks/stripe`)
 - `UNOROUTER_API_KEY` (optional `UNOROUTER_BASE_URL`, `UNOROUTER_MODEL_*` alias overrides)
+- `FREELLM_API_KEY` (optional `FREELLM_BASE_URL`, `FREELLM_MODEL_*` routing-strategy overrides). Secondary OpenAI-compatible `/v1` path for failover / high-volume continuation.
 - Connector OAuth (optional): `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`, Slack and Vercel equivalents, `CONNECTOR_OAUTH_STATE_SECRET`
 - Optional `GITHUB_DISCOVERY_TOKEN` for `GET /api/connectors/discover` GitHub Search rate limits (catalog-only)
 
@@ -73,6 +74,8 @@ lib/auth/       # Neon Auth server + actions
 lib/catalog/    # paginated catalog queries
 lib/fixtures/   # small UI samples (not the 10k seed)
 lib/unorouter/  # UnoRouter adapter + alias map
+lib/freellm/    # FreeLLM-API OpenAI-compatible failover adapter
+lib/llm/        # shared OpenAI-compat client + routing policy
 lib/connectors/ # first-party connector registry + grants
 lib/runtime/    # sessions, runs, memories, connector tools
 lib/stripe/     # Checkout + signed webhooks
@@ -87,15 +90,16 @@ See `AGENTS.md` for conventions for coding agents.
 ## Routes
 
 - `/` — landing
-- `/marketplace` — paginated catalog UI (server-side; never dumps the full list)
+- `/marketplace` — paginated catalog UI (server-side; first-class groups Coding / Marketing / Design / Sales)
 - `/agents/[slug]` — agent profile from Postgres
 - `/compare` — side-by-side catalog fields (up to 4 slugs; `GET /api/agents/compare`)
 - `/checkout` — price review and Stripe Checkout resume (`?rentalId=`). Not a fake card form.
-- `/chat` — rental chat (SSE); requires a webhook-activated rental
+- `/chat` — rental chat (SSE) or multi-rental group session; requires a webhook-activated rental
 - `/connectors` — tenant connector grants for an active rental
 - `/connectors/discover` — catalog-only MCP registry / GitHub topic search
 - `/login` — Neon Auth sign-in / sign-up / sign-out
-- `GET /api/agents` — catalog JSON (search, category, tier, sort, page, pageSize)
+- `GET /api/agents` — catalog JSON (search, category, group, tier, sort, page, pageSize)
+- `POST /api/sessions` — solo `{ rentalId }` or group `{ kind: "group", rentalIds }`
 - `GET /api/agents/compare` — side-by-side compare (`slugs=a,b,c`, max 4)
 - `GET /api/agents/[slug]` — detail JSON
 - `GET|POST /api/favorites`, `DELETE /api/favorites/[slug]` — session required

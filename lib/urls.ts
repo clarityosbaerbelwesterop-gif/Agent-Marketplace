@@ -16,6 +16,7 @@ export function marketplaceHref(input: HrefInput = {}): string {
   const params = new URLSearchParams();
 
   if (input.search) params.set("search", input.search);
+  if (input.group) params.set("group", input.group);
   if (input.category) params.set("category", input.category);
   if (input.tier) params.set("tier", input.tier);
   if (input.sort && input.sort !== "newest") params.set("sort", input.sort);
@@ -69,4 +70,8 @@ export function agentHref(slug: string, durationId?: string): string {
 
 export function chatRentalHref(rentalId: string): string {
   return `/chat?rentalId=${encodeURIComponent(rentalId)}`;
+}
+
+export function chatSessionHref(sessionId: string): string {
+  return `/chat?sessionId=${encodeURIComponent(sessionId)}`;
 }

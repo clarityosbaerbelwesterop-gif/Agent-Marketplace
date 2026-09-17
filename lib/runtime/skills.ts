@@ -9,18 +9,21 @@ export function planningInstructions(tier: AgentTier): string {
       "Plan before acting: restate the goal, list tools you may need, then execute.",
       "After each tool result, check whether it actually answers the question.",
       "If a tool fails or the result is empty, retry with a tighter argument before giving up.",
-      "Do not invent metrics, user counts, or benchmark scores.",
+      "Prefer real tool results over guessing. If you did not call a tool, do not claim you read memory, connectors, or external APIs.",
+      "Do not invent metrics, user counts, benchmark scores, or successful API outcomes.",
     ].join(" ");
   }
   if (policy.planning === "structured") {
     return [
       "Outline a short plan, pick a tool only when it is required, then answer.",
       "If a tool fails, try once more with corrected input.",
+      "Prefer real tool results over guessing. Never invent connector or memory outcomes.",
       "Do not invent metrics, user counts, or benchmark scores.",
     ].join(" ");
   }
   return [
     "Answer directly. Use a tool only when the user asks for stored notes or a connector.",
+    "Prefer real tool results over guessing. If no tool ran, say so instead of fabricating results.",
     "Do not invent metrics, user counts, or benchmark scores.",
   ].join(" ");
 }
@@ -37,7 +40,7 @@ export function buildSystemPrompt(input: {
     `You are ${input.agentName}, a rented marketplace agent.`,
     input.agentDescription,
     planningInstructions(input.tier),
-    "First-party connectors are neon, github, slack, vercel, supabase, render, stripe, and cursor. Only use connector tools that were provided. Never invent credentials, resources, or successful API results.",
+    "First-party connectors include neon, github, slack, vercel, supabase, render, stripe, cursor, higgsfield, linkedin, meta, and google-search. Only use connector tools that were provided. Never invent credentials, resources, or successful API results.",
   ];
   if (input.connectorSummary) {
     sections.push(input.connectorSummary);

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { jsonError, readJsonBody, requireApiUser } from "@/lib/api/guard";
-import { listMemories, writeMemory } from "@/lib/runtime/memory";
+import { listMemories, serializeMemory, writeMemory } from "@/lib/runtime/memory";
 import { ensurePersonalWorkspace } from "@/lib/runtime/rentals";
 
 export const dynamic = "force-dynamic";
@@ -17,13 +17,9 @@ export async function GET(request: Request) {
   const items = await listMemories(auth.userId, workspaceId);
   return NextResponse.json({
     workspaceId,
-    items: items.map((row) => ({
-      id: row.id,
-      kind: row.kind,
-      content: row.content,
-      sessionId: row.sessionId,
-      createdAt: row.createdAt.toISOString(),
-    })),
+    isolation:
+      "Memories are workspace-member scoped via RLS. visibility=user is private to the Neon Auth user; visibility=workspace is readable by concurrent rented agents in the same workspace. Writes use short transactions with no global lock.",
+    items: items.map(serializeMemory),
   });
 }
 
@@ -55,11 +51,16 @@ export async function POST(request: Request) {
     kindRaw === "transcript" || kindRaw === "fact" || kindRaw === "preference"
       ? kindRaw
       : "note";
+  const visibilityRaw = String(
+    (payload as { visibility?: unknown }).visibility ?? "user",
+  );
+  const visibility = visibilityRaw === "workspace" ? "workspace" : "user";
   const result = await writeMemory({
     userId: auth.userId,
     workspaceId,
     sessionId: typeof payload.sessionId === "string" ? payload.sessionId : null,
     kind,
+    visibility,
     content: String(payload.content ?? ""),
   });
   if (!result.ok) {

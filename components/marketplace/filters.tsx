@@ -3,7 +3,11 @@
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/field";
 import { AGENT_CATEGORIES, AGENT_SORTS, AGENT_TIERS } from "@/lib/catalog/constants";
-import { SORT_LABELS, TIER_LABELS } from "@/lib/labels";
+import {
+  AGENT_CATEGORY_GROUPS,
+  CATEGORY_GROUP_MEMBERS,
+} from "@/lib/catalog/groups";
+import { GROUP_LABELS, SORT_LABELS, TIER_LABELS } from "@/lib/labels";
 import type { ParsedAgentsQuery } from "@/lib/catalog/parse-query";
 
 export function MarketplaceFilters({
@@ -13,6 +17,10 @@ export function MarketplaceFilters({
   query: ParsedAgentsQuery;
   compare: string[];
 }) {
+  const categories = query.group
+    ? CATEGORY_GROUP_MEMBERS[query.group]
+    : AGENT_CATEGORIES;
+
   return (
     <form
       action="/marketplace"
@@ -35,10 +43,21 @@ export function MarketplaceFilters({
         />
       </Field>
 
+      <Field id="group" label="Gruppe">
+        <Select id="group" name="group" defaultValue={query.group ?? ""}>
+          <option value="">Alle</option>
+          {AGENT_CATEGORY_GROUPS.map((group) => (
+            <option key={group} value={group}>
+              {GROUP_LABELS[group]}
+            </option>
+          ))}
+        </Select>
+      </Field>
+
       <Field id="category" label="Kategorie">
         <Select id="category" name="category" defaultValue={query.category ?? ""}>
           <option value="">Alle</option>
-          {AGENT_CATEGORIES.map((category) => (
+          {categories.map((category) => (
             <option key={category} value={category}>
               {category}
             </option>
@@ -67,7 +86,7 @@ export function MarketplaceFilters({
         </Select>
       </Field>
 
-      <div className="flex items-end lg:col-span-2">
+      <div className="flex items-end">
         <Button type="submit" className="w-full">
           Anwenden
         </Button>

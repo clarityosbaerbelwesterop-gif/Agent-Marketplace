@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ChatClient } from "@/components/chat-client";
 import { EndRentalForm } from "@/components/end-rental-form";
+import { GroupChatStart } from "@/components/group-chat-start";
 import { PaymentPendingNotice } from "@/components/payment-pending-notice";
 import { RenewRentalForm } from "@/components/renew-rental-form";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -14,13 +15,14 @@ import {
   rentalIsActive,
 } from "@/lib/runtime/rentals";
 import { getOrCreateOpenSession, listSessionRuns } from "@/lib/runtime/runs";
-import { rentalCheckoutHref } from "@/lib/urls";
+import { getSessionForUser, listGroupMembers } from "@/lib/runtime/rooms";
+import { chatRentalHref, rentalCheckoutHref } from "@/lib/urls";
 import { firstSearchParam } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Chat",
   description:
-    "Chathub für eine bezahlte Miete. UNOROUTER streamt, sobald ein Key gesetzt ist.",
+    "Chathub für eine bezahlte Miete. UNOROUTER streamt, sobald ein Key gesetzt ist; FreeLLM ist Failover.",
 };
 
 export const dynamic = "force-dynamic";
@@ -30,6 +32,7 @@ export default async function ChatPage({
 }: PageProps<"/chat">) {
   const params = await searchParams;
   const rentalId = firstSearchParam(params.rentalId);
+  const sessionIdParam = firstSearchParam(params.sessionId);
   const session = await getVerifiedSession();
 
   if (!session?.user) {
@@ -57,7 +60,7 @@ export default async function ChatPage({
     );
   }
 
-  if (!rentalId) {
+  if (!rentalId && !sessionIdParam) {
     const rentals = await listRentals(session.user.id);
     const active = rentals.filter((row) =>
       rentalIsActive({
@@ -69,7 +72,7 @@ export default async function ChatPage({
     return (
       <PageShell
         title="Chat"
-        description="Wählen Sie eine aktive, per Webhook bestätigte Miete. Ausstehend, storniert und abgelaufen werden abgelehnt."
+        description="Wählen Sie eine aktive, per Webhook bestätigte Miete — oder starten Sie eine Gruppensitzung mit mehreren bezahlten Mietfenstern. Ausstehend, storniert und abgelaufen werden abgelehnt."
       >
         {active.length === 0 ? (
           <EmptyState
@@ -82,7 +85,7 @@ export default async function ChatPage({
           <ul className="flex flex-col gap-2 text-sm">
             {active.map((row) => (
               <li key={row.id}>
-                <ButtonLink href={`/chat?rentalId=${row.id}`} variant="secondary">
+                <ButtonLink href={chatRentalHref(row.id)} variant="secondary">
                   {row.agentName}
                 </ButtonLink>
                 <span className="ml-2 text-muted">· {row.agentTier}</span>
@@ -90,6 +93,111 @@ export default async function ChatPage({
             ))}
           </ul>
         )}
+        <GroupChatStart
+          rentals={active.map((row) => ({
+            id: row.id,
+            agentName: row.agentName ?? row.id,
+            agentTier: row.agentTier ?? "",
+          }))}
+        />
+      </PageShell>
+    );
+  }
+
+  if (sessionIdParam && !rentalId) {
+    const groupSession = await getSessionForUser(session.user.id, sessionIdParam);
+    if (!groupSession) {
+      return (
+        <PageShell title="Chat" description="Diese Sitzung fehlt.">
+          <EmptyState
+            title="Sitzung nicht gefunden"
+            description="Öffnen Sie den Chathub und wählen Sie eine aktive Miete."
+            actionHref="/chat"
+            actionLabel="Andere Miete wählen"
+          />
+        </PageShell>
+      );
+    }
+    if (groupSession.kind !== "group") {
+      return (
+        <PageShell title="Chat" description="Öffnen Sie diese Sitzung über die Miete.">
+          <ButtonLink
+            href={chatRentalHref(groupSession.rentalId)}
+            variant="secondary"
+          >
+            Miet-Chat öffnen
+          </ButtonLink>
+        </PageShell>
+      );
+    }
+    if (groupSession.status === "closed") {
+      return (
+        <PageShell
+          title="Gruppenchat"
+          description="Diese Gruppensitzung endete, weil Mitgliedsmieten endeten oder storniert wurden."
+        >
+          <ButtonLink href="/chat" variant="secondary">
+            Andere Miete wählen
+          </ButtonLink>
+        </PageShell>
+      );
+    }
+    const members = await listGroupMembers(session.user.id, groupSession.id);
+    const activeMembers = members.filter((member) => member.active);
+    if (activeMembers.length === 0) {
+      return (
+        <PageShell
+          title="Gruppenchat"
+          description="In diesem Raum bleiben keine aktiven bezahlten Mieten."
+        >
+          <ButtonLink href="/chat" variant="secondary">
+            Andere Miete wählen
+          </ButtonLink>
+        </PageShell>
+      );
+    }
+    const runs = await listSessionRuns(session.user.id, groupSession.id);
+    return (
+      <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-10 sm:px-6">
+        <header className="flex flex-col gap-2">
+          <p className="text-xs uppercase tracking-[0.16em] text-muted">
+            Gruppenchat
+          </p>
+          <h1 className="font-display text-4xl tracking-tight">
+            {activeMembers.map((member) => member.agentName).join(", ")}
+          </h1>
+          <p className="text-sm text-muted">
+            Jeder Turn geht an jede verbleibende bezahlte Miete. Workspace-Memories
+            sind für alle Mitglieder sichtbar.
+          </p>
+        </header>
+        <ChatClient
+          rentalId={null}
+          sessionId={groupSession.id}
+          agentName={activeMembers.map((member) => member.agentName).join(", ")}
+          groupMembers={activeMembers.map((member) => ({
+            rentalId: member.rentalId,
+            agentName: member.agentName,
+          }))}
+          initialRuns={runs.map((run) => ({
+            id: run.id,
+            status: run.status,
+            modelIdUsed: run.modelIdUsed,
+            skillVersion: run.skillVersion,
+            input: run.input as { message?: unknown } | null,
+            output: run.output as { text?: unknown; error?: unknown } | null,
+          }))}
+        />
+      </main>
+    );
+  }
+
+  if (!rentalId) {
+    return (
+      <PageShell title="Chat" description="Wählen Sie eine aktive Miete.">
+        <ButtonLink href="/chat" variant="ghost">
+          Zurück
+        </ButtonLink>
       </PageShell>
     );
   }
@@ -180,7 +288,8 @@ export default async function ChatPage({
           {bundle.agent.name}
         </h1>
         <p className="text-sm text-muted">
-          Authentifizierter Stream. Jeder Turn landet als agent_run.
+          Authentifizierter Stream. Jeder Turn landet als agent_run mit
+          model_id_used und provider_used.
         </p>
       </header>
       <ChatClient

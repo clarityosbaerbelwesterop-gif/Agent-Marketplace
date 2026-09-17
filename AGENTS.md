@@ -28,7 +28,7 @@ Integrations:
 - Lakebase Postgres via Neon (`DATABASE_URL`) — schema + RLS in this repo
 - Neon Auth (Managed Better Auth) via `@neondatabase/auth` — tables already exist in schema `neon_auth`; do **not** recreate them or add a second auth library
 - Stripe billing — official `stripe` SDK. Secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`. `POST /api/rentals` and `POST /api/checkout` create `rentals.status=pending` and a Checkout Session (`mode=payment`; catalog durations are one-time hour windows, not subscriptions). `POST /api/webhooks/stripe` verifies the signature and is the only path that sets `active`, `starts_at` / `ends_at`, and Stripe ids. Success URL is `/chat?rentalId=` but must not be trusted. Missing keys → HTTP 503 (no unpaid bypass).
-- Model routing via UnoRouter (`UNOROUTER_API_KEY`, optional `UNOROUTER_BASE_URL`). Catalog rows still store **model aliases** (`standard` / `advanced` / `expert` / `elite` / `frontier`). `lib/unorouter/` maps those aliases to documented UnoRouter model IDs. Same-tier fallbacks never silently downgrade a premium alias to a much weaker model. If the key is missing, adapter code still loads; runtime calls fail with HTTP 503 and a clear message.
+- Model routing via UnoRouter (`UNOROUTER_API_KEY`, optional `UNOROUTER_BASE_URL`) plus optional FreeLLM-API failover (`FREELLM_API_KEY`, optional `FREELLM_BASE_URL`). Catalog rows still store **model aliases** (`standard` / `advanced` / `expert` / `elite` / `frontier`). `lib/unorouter/` maps those aliases to documented UnoRouter model IDs. `lib/freellm/` is an OpenAI-compatible adapter for a self-hosted FreeLLM `/v1` router (documented `auto` / `auto:smart` / `auto:fast` strategies). Paid/Frontier turns prefer UNOROUTER; FreeLLM is failover / high-volume continuation. Same-tier UNOROUTER fallbacks never silently downgrade a premium alias to a much weaker model. If a paid alias is served by FreeLLM, the run records `provider_used`, the actual routed model id, and `downgradedFromPaid`. Missing keys → HTTP 503 (no unpaid bypass); either provider is enough to start a turn.
 
 Use **one** auth system (Neon Auth). Do not introduce a second auth library.
 
@@ -48,6 +48,8 @@ Neon project (docs only): `calm-fog-88681490`, default branch `main` / `br-young
 | `lib/catalog/` | Catalog query parsing, list/detail/compare, favorites |
 | `lib/fixtures/` | Small **UI-only** sample profiles. Not the 10k seed. Not sent as the marketplace list. |
 | `lib/unorouter/` | UnoRouter OpenAI-compatible adapter, alias map, capabilities |
+| `lib/freellm/` | FreeLLM-API OpenAI-compatible adapter (failover / high-volume) |
+| `lib/llm/` | Shared OpenAI-compat client + dual-provider routing policy |
 | `lib/runtime/` | Sessions, runs, memories, skill loop; connector tools gated on grants |
 | `lib/connectors/` | First-party connector registry, grant CRUD, OAuth callbacks, runtime tools |
 | `lib/connectors/discovery/` | Catalog-only MCP registry + GitHub topic search (timeouts; not grantable) |
@@ -68,7 +70,7 @@ Route files live next to the URL they represent:
 - `app/connectors/page.tsx` → `/connectors` (tenant connector grants for a rental)
 - `app/connectors/discover/page.tsx` → `/connectors/discover` (catalog-only MCP search)
 - `app/login/page.tsx` → `/login` (Neon Auth sign-in / sign-up / sign-out)
-- `GET /api/agents` → paginated catalog (search, category, tier, sort, page, pageSize ≤ 50)
+- `GET /api/agents` → paginated catalog (search, category, **group**=coding|marketing|design|sales, tier, sort, page, pageSize ≤ 50)
 - `GET /api/agents/compare` → side-by-side catalog fields for up to 4 slugs (no invented benchmarks)
 - `GET /api/agents/[slug]` → agent detail + published skill package
 - `GET|POST /api/favorites`, `DELETE /api/favorites/[slug]` → session-required; uses `withUserRls`
@@ -80,7 +82,8 @@ Route files live next to the URL they represent:
 - `POST /api/webhooks/stripe` → signed `checkout.session.completed` / `payment_intent.succeeded` (idempotent)
 - `POST /api/chat` → authenticated SSE (or `{ background: true }` queue); persists `agent_runs`; **rejects** ended, non-active, and expired rentals
 - `GET /api/sessions/[id]`, `GET /api/runs/[id]` → poll durable run status
-- `GET|POST /api/memories` → user/workspace memory via `withUserRls`
+- `GET|POST /api/memories` → user/workspace memory via `withUserRls` (short transactions; `visibility=user|workspace`)
+- `POST /api/sessions` → `{ rentalId }` solo or `{ kind: "group", rentalIds }` (2–4 active paid rentals)
 - `GET /api/connectors` → first-party connector catalog (auth). Optional `rentalId` / `sessionId` / `workspaceId` attaches grants
 - `GET /api/connectors/providers` → public first-wave provider list (no session)
 - `GET /api/connectors/discover` → catalog-only MCP server search (`q=`); official registry + GitHub topics; never installs or grants
@@ -103,9 +106,10 @@ Public catalog is shared. Private rows are scoped to a Neon Auth user and/or wor
 | `rentals` | Rental window, usage counters, Stripe session/PI ids, end audit (`ended_at`, `ended_by_user_id`, `end_reason`) | renter or workspace member |
 | `rental_payments` | One Checkout/PaymentIntent per purchase or renewal; `applied_at` is the idempotency claim | privileged / webhook (`getDb()`) |
 | `stripe_events` | Processed Stripe event ids (PK) | privileged / webhook (`getDb()`) |
-| `agent_sessions` | Chat/runtime session under a rental | workspace member + visible rental |
-| `agent_runs` | Background work during a rental | via session visibility |
-| `memories` | User+workspace isolated notes (`kind` + `content`; no embedding column yet) | owning user in that workspace |
+| `agent_sessions` | Chat/runtime session under a rental (`kind` solo \| group) | workspace member + visible rental (or group member rental) |
+| `agent_session_members` | Paid rentals in a group room | via session visibility |
+| `agent_runs` | Background work during a rental (`model_id_used`, `provider_used`) | via session visibility |
+| `memories` | User+workspace isolated notes (`kind` + `visibility` + `content`; no embedding column yet) | owning user, or workspace-shared for members |
 | `connector_grants` | Per user+workspace provider scopes, status, metadata, optional credentials | owning user in that workspace |
 
 Auth tables (`neon_auth.user`, `session`, `account`, `organization`, `member`, …) are owned by Neon Auth. Marketplace user columns are `uuid` to match `neon_auth.user.id`. FKs to `neon_auth."user"(id)` are in the SQL migration only so drizzle-kit cannot CREATE/DROP auth tables.
@@ -165,7 +169,9 @@ Every marketplace table has `ENABLE ROW LEVEL SECURITY` and `FORCE ROW LEVEL SEC
 | `rentals` | none | SELECT: renter or workspace member; INSERT: renter + member; DELETE: renter |
 | `rental_payments` / `stripe_events` | none | none (FORCE RLS; webhook uses `getDb()` / `neondb_owner`) |
 | `agent_sessions` / `agent_runs` | none | via `is_rental_visible` / `is_session_visible` |
-| `memories` / `connector_grants` | none | `user_id` = self **and** workspace member |
+| `memories` | none | SELECT: workspace member **and** (`user_id` = self **or** `visibility=workspace`). INSERT/UPDATE/DELETE: `user_id` = self **and** workspace member. Short `withUserRls` transactions; no global lock. |
+| `connector_grants` | none | `user_id` = self **and** workspace member |
+| `agent_session_members` | none | via `is_session_visible` (host or member rental visible) |
 
 Helper functions `is_workspace_member`, `is_workspace_owner`, `is_rental_visible`, `is_session_visible` are `SECURITY DEFINER` so policies do not recurse through RLS.
 
@@ -184,7 +190,7 @@ Apply `drizzle/*.sql` to Neon in order. Then run `pnpm db:seed:agents` against `
 
 ## First-party connectors
 
-Canonical ids: `neon`, `github`, `slack`, `vercel`, `supabase`, `render`, `stripe`, `cursor`. Registry: `lib/connectors/registry.ts` (display name, description, scopes, env/secret names, capability tags). These are **tenant grants during a rental**, not Cursor/Grok Bot marketplace plugins. Catalog seed still emits a few legacy ids (`postgres`, `figma`, …); runtime aliases them onto the first-party set without a re-seed. Agent pages merge that set with the profile’s `connectors` JSON. After a signed Checkout webhook activates a rental, pending grant stubs for the eight providers are inserted (not marked active).
+Canonical ids: `neon`, `github`, `slack`, `vercel`, `supabase`, `render`, `stripe`, `cursor`, `higgsfield`, `linkedin`, `meta`, `google-search`. Registry: `lib/connectors/registry.ts` (display name, description, scopes, env/secret names, capability tags). These are **tenant grants during a rental**, not Cursor/Grok Bot marketplace plugins. Catalog seed still emits a few legacy ids (`postgres`, `figma`, …); runtime aliases them onto the first-party set without a re-seed. Agent pages merge that set with the profile’s `connectors` JSON. After a signed Checkout webhook activates a rental, pending grant stubs for every registry id are inserted (not marked active). Higgsfield / LinkedIn / Meta / Google Search are **catalog + grant stubs only** — no fake OAuth.
 
 | Connector | Auth | Platform env | Tenant secrets |
 | --- | --- | --- | --- |
@@ -196,6 +202,10 @@ Canonical ids: `neon`, `github`, `slack`, `vercel`, `supabase`, `render`, `strip
 | render | API key | — | `RENDER_API_KEY` |
 | stripe | API key (tenant; not Checkout) | — | `STRIPE_SECRET_KEY` |
 | cursor | API key | — | `CURSOR_API_KEY` |
+| higgsfield | API key (stub) | — | `HIGGSFIELD_API_KEY` |
+| linkedin | API key (stub; no fake OAuth) | — | `LINKEDIN_ACCESS_TOKEN` |
+| meta | API key (stub; Meta / Meta Ads) | — | `META_ACCESS_TOKEN` |
+| google-search | API key (stub) | — | `GOOGLE_SEARCH_API_KEY`, `GOOGLE_SEARCH_CX` |
 
 `GET /connectors?rentalId=` is the grant UI. `GET /connectors/discover` and `GET /api/connectors/discover?q=` search public MCP catalogs only (official registry `https://registry.modelcontextprotocol.io/v0.1/servers` and GitHub topics `mcp-server` / `model-context-protocol`). Fetches use timeouts. Results are untrusted metadata (name, repo URL, description) and are **not** grantable. Do not auto-install or execute discovered servers. Optional `GITHUB_DISCOVERY_TOKEN` only raises GitHub Search rate limits. Do not re-seed the 10k catalog for connector work.
 
@@ -203,6 +213,7 @@ Canonical ids: `neon`, `github`, `slack`, `vercel`, `supabase`, `render`, `strip
 
 - Privileged only. Direct (non-pooler) URI. Batched upserts (250 rows).
 - Unique slugs: `{category}-{spec}-{domain}-{tier}` (10,000 combinations).
+- First-class filter groups (no re-seed): Coding, Marketing, Design, Sales map existing catalog categories (`software`/`frontend`/… → coding, plus `marketing`, `design`, `sales`). Other catalog categories remain filterable.
 - Idempotent: `ON CONFLICT (slug) DO UPDATE` for profiles; `(slug, version)` for skills. Re-runs refresh generated fields and **keep existing ids**. They do not delete slugs the generator no longer emits.
 - Tiers map to **model aliases** of the same name (`standard` … `frontier`). Higher tiers have higher `rental_options` prices, more tokens, and broader permissions/connectors.
 - `rating_status` is `untested` or `baselined` only. No fake benchmarks.
@@ -237,13 +248,27 @@ Default alias map (same-tier fallbacks only):
 
 Paid aliases do **not** fall back to `:free` variants. A frontier run will not use a standard model.
 
+## FreeLLM-API (secondary / failover)
+
+OpenAI-compatible client in `lib/freellm/`. Point `FREELLM_BASE_URL` at a FreeLLM `/v1` router (documented default `http://127.0.0.1:3001/v1`; see https://github.com/tashfeenahmed/freellmapi). Canonical secret: `FREELLM_API_KEY`. This is **not** a vendored fork of FreeLLM — only the OpenAI-compatible wire + documented `auto*` routing strategies are used.
+
+`lib/llm/route.ts` builds the walk order:
+
+- Paid / Frontier: UNOROUTER primary + same-tier fallbacks first. FreeLLM is appended as `failover`, or inserted after the first UNOROUTER hop for **high-volume continuation** (usage ≥ 50% of included tokens or ≥ 80k consumed).
+- Standard: UNOROUTER first when configured; FreeLLM is available without a paid-downgrade flag.
+- The run always stores `model_id_used` (actual routed id, including FreeLLM `X-Routed-Via` when present), `provider_used`, and `downgradedFromPaid` when a paid alias was served by FreeLLM.
+
 ## Agent runtime
 
-`lib/runtime/` loads `agent_profiles` + the published skill package, creates/continues `agent_sessions` and `agent_runs` for an **active** rental, injects skill instructions (planning / tool selection / result checking / retry — stronger on higher tiers), and reads/writes `memories` through `withUserRls`.
+`lib/runtime/` loads `agent_profiles` + the published skill package, creates/continues `agent_sessions` and `agent_runs` for an **active** rental, injects skill instructions (planning / tool selection / prefer real tool results / result checking / retry — stronger on higher tiers), and reads/writes `memories` through `withUserRls`.
+
+**Shared learning network:** `memories.visibility` is `user` (default, private) or `workspace` (readable by every workspace member, including concurrent rented agents). Writes are one short RLS transaction each; there is no advisory lock that serializes all agents. Isolation remains user + workspace + RLS.
+
+**Group chat:** `POST /api/sessions` `{ kind: "group", rentalIds }` opens an `agent_sessions.kind=group` room with `agent_session_members`. Only the signed-in user's **active paid** rentals in the same workspace may join (2–4). `POST /api/chat` with that `sessionId` fans the turn to each remaining member. Ending a rental removes it from rooms and closes the group when fewer than two paid members remain.
 
 Work is durable in Postgres (`queued` → `running` → `succeeded`/`failed`). `POST /api/chat` streams SSE while the client is connected and uses Next.js `after()` so the run can finish after the browser closes. `{ "background": true }` queues the run and returns IDs for `GET /api/runs/[id]`.
 
-Connector grants: first-party App MCP set in `lib/connectors/` (`neon`, `github`, `slack`, `vercel`, `supabase`, `render`, `stripe`, `cursor`). Rows live in `connector_grants` (RLS: self + workspace member). API status is `pending` | `active` | `revoked`; Postgres still stores active as `granted`. Credentials JSONB is never returned by APIs. Chat/runtime exposes `{provider}_status` / `{provider}_invoke` **only for active grants**. Tools never invent credentials; missing tokens return structured `not_connected`. `{provider}_invoke` is a stub (`not_implemented`) and does not fabricate resources. `status` tools may ping the provider when a token is stored.
+Connector grants: first-party App MCP set in `lib/connectors/` (`neon`, `github`, `slack`, `vercel`, `supabase`, `render`, `stripe`, `cursor`, `higgsfield`, `linkedin`, `meta`, `google-search`). Rows live in `connector_grants` (RLS: self + workspace member). API status is `pending` | `active` | `revoked`; Postgres still stores active as `granted`. Credentials JSONB is never returned by APIs. Chat/runtime exposes `{provider}_status` / `{provider}_invoke` **only for active grants**. Tools never invent credentials; missing tokens return structured `not_connected`. `{provider}_invoke` is a stub (`not_implemented`) and does not fabricate resources. `status` tools may ping the provider when a token is stored (new stubs report stored credentials without a live ping).
 
 OAuth (authorization code) is implemented for GitHub, Slack, and Vercel when `*_CLIENT_ID` / `*_CLIENT_SECRET` plus a ≥32-char state secret (`CONNECTOR_OAUTH_STATE_SECRET` or `NEON_AUTH_COOKIE_SECRET`) are set. Callbacks: `/api/connectors/oauth/{github|slack|vercel}/callback`. If OAuth env is missing, POST leaves the grant **pending** (no fake success). API-key connectors become active only when the required tenant secrets are posted. `stubGrant` is not supported. The Stripe **connector** is tenant API access for a rented agent, not marketplace Checkout.
 
@@ -315,9 +340,12 @@ Empty Stripe keys make checkout and webhook routes return HTTP 503. There is no 
 
 | Variable | Notes |
 | --- | --- |
-| `UNOROUTER_API_KEY` | Create at https://unorouter.com/en/token. Missing key → chat runtime HTTP 503 |
+| `UNOROUTER_API_KEY` | Create at https://unorouter.com/en/token. Missing key → chat runtime HTTP 503 unless FreeLLM is configured |
 | `UNOROUTER_BASE_URL` | Optional; default `https://api.unorouter.com/v1` |
 | `UNOROUTER_MODEL_<ALIAS>` / `_FALLBACKS` | Optional same-tier overrides. Paid aliases must not use `:free` IDs |
+| `FREELLM_API_KEY` | Unified key for a FreeLLM `/v1` router. Optional failover / high-volume path |
+| `FREELLM_BASE_URL` | Optional; default `http://127.0.0.1:3001/v1` |
+| `FREELLM_MODEL_<ALIAS>` / `_FALLBACKS` | Optional FreeLLM `auto*` (or catalog id) overrides |
 
 **Connector OAuth (optional; GitHub / Slack / Vercel)**
 
@@ -344,7 +372,7 @@ If OAuth env is missing, grant POST stays `pending` (no fake success). API-key c
 - [ ] Add `http://localhost:3000` only for local/dev, not as a substitute for production.
 - [ ] Confirm Google (and email/password) callback hosts match those domains.
 
-### 5. Migrations `0000`–`0004` (plus `0005` indexes)
+### 5. Migrations `0000`–`0006`
 
 Apply `drizzle/*.sql` **in order** against `DATABASE_URL_UNPOOLED` (`pnpm db:migrate`):
 
@@ -356,6 +384,7 @@ Apply `drizzle/*.sql` **in order** against `DATABASE_URL_UNPOOLED` (`pnpm db:mig
 | `drizzle/0003_connector_grant_secrets.sql` | Connector grant credentials column |
 | `drizzle/0004_rental_end_audit.sql` | `ended_at` / `ended_by_user_id` / `end_reason` |
 | `drizzle/0005_rental_end_lookup_idx.sql` | Session/run indexes used by rental end |
+| `drizzle/0006_shared_memory_group_sessions.sql` | Memory `visibility`, group sessions + members, `provider_used`, session visibility via member rentals |
 
 Then seed once: `pnpm db:seed:agents` (idempotent upsert; do not re-seed unless the generator changed).
 
@@ -366,7 +395,9 @@ Then seed once: `pnpm db:seed:agents` (idempotent upsert; do not re-seed unless 
 - [ ] Create Checkout (`POST /api/checkout` and `POST /api/rentals` stay aligned: `{ slug, durationId }`; checkout also returns `url`).
 - [ ] Pay in Stripe test/live; webhook sets `rentals.status=active`. Client success URL `/chat?rentalId=` is **not** trusted.
 - [ ] Chat against that rental; ended/pending/expired rentals return HTTP 409 (`Rental has ended` / pending / expired copy).
+- [ ] `GET /api/agents?group=coding&pageSize=1` maps existing software/frontend/… categories (no invented benchmarks).
 - [ ] `GET /api/connectors/discover?q=github` items have `grantable: false`.
+- [ ] `GET /api/connectors/providers` includes `higgsfield`, `linkedin`, `meta`, `google-search` as stubs (oauthConfigured false unless you add real OAuth later).
 
 ## Coding notes
 

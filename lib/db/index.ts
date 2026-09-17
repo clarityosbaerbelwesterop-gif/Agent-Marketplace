@@ -7,6 +7,7 @@ import type {
   agentProfiles,
   agentRuns,
   agentSessions,
+  agentSessionMembers,
   agentSkills,
   connectorGrants,
   favorites,
@@ -43,6 +44,9 @@ export type StripeEventRow = typeof stripeEvents.$inferSelect;
 
 export type AgentSession = typeof agentSessions.$inferSelect;
 export type NewAgentSession = typeof agentSessions.$inferInsert;
+
+export type AgentSessionMember = typeof agentSessionMembers.$inferSelect;
+export type NewAgentSessionMember = typeof agentSessionMembers.$inferInsert;
 
 export type AgentRun = typeof agentRuns.$inferSelect;
 export type NewAgentRun = typeof agentRuns.$inferInsert;

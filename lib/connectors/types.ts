@@ -9,6 +9,10 @@ export const CONNECTOR_IDS = [
   "render",
   "stripe",
   "cursor",
+  "higgsfield",
+  "linkedin",
+  "meta",
+  "google-search",
 ] as const;
 
 export type ConnectorId = (typeof CONNECTOR_IDS)[number];
@@ -21,7 +25,11 @@ export type ConnectorCapabilityTag =
   | "payments"
   | "auth"
   | "storage"
-  | "ai";
+  | "ai"
+  | "media"
+  | "social"
+  | "ads"
+  | "search";
 
 export type ConnectorAuthKind = "oauth" | "api_key" | "mixed";
 

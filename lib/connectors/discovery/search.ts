@@ -10,7 +10,7 @@ import type {
 } from "./types";
 
 const NOTICE =
-  "Discovery is catalog-only. Do not auto-install or trust arbitrary MCP server code. Only the first-wave eight connectors can be granted at runtime.";
+  "Discovery is catalog-only. Do not auto-install or trust arbitrary MCP server code. Only first-wave connectors in the in-app registry can be granted at runtime.";
 
 const MAX_QUERY_LENGTH = 80;
 const MAX_ITEMS = 40;

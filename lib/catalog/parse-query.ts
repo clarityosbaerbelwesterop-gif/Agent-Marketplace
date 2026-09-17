@@ -7,10 +7,16 @@ import {
   MIN_PAGE_SIZE,
   type AgentSort,
 } from "./constants";
+import {
+  isAgentCategoryGroup,
+  categoriesForGroup,
+  type AgentCategoryGroup,
+} from "./groups";
 
 export type ParsedAgentsQuery = {
   search: string | null;
   category: string | null;
+  group: AgentCategoryGroup | null;
   tier: string | null;
   sort: AgentSort;
   page: number;
@@ -59,9 +65,21 @@ export function parseAgentsQuery(
   const searchRaw = get("search")?.trim() ?? "";
   const search = searchRaw ? sanitizeSearch(searchRaw) : null;
 
+  const groupRaw = get("group")?.trim() || null;
+  if (groupRaw && !isAgentCategoryGroup(groupRaw)) {
+    return { error: `Unknown group: ${groupRaw}`, status: 400 };
+  }
+  const group = groupRaw as AgentCategoryGroup | null;
+
   const categoryRaw = get("category")?.trim() || null;
   if (categoryRaw && !AGENT_CATEGORY_SET.has(categoryRaw)) {
     return { error: `Unknown category: ${categoryRaw}`, status: 400 };
+  }
+  if (categoryRaw && group && !categoriesForGroup(group).includes(categoryRaw)) {
+    return {
+      error: `Category ${categoryRaw} is not in the ${group} group`,
+      status: 400,
+    };
   }
 
   const tierRaw = get("tier")?.trim() || null;
@@ -87,6 +105,7 @@ export function parseAgentsQuery(
   return {
     search: search || null,
     category: categoryRaw,
+    group,
     tier: tierRaw,
     sort: sortRaw as AgentSort,
     page,

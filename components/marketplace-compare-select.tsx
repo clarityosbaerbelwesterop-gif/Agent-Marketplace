@@ -10,6 +10,7 @@ export type MarketplaceCompareAgent = {
   tagline: string | null;
   description: string;
   category: string;
+  categoryGroup?: string | null;
   tier: string;
   ratingStatus: string;
   modelAlias: string | null;
@@ -75,7 +76,10 @@ export function MarketplaceCompareSelect({
                 {agent.tagline ?? agent.description}
               </p>
               <p className="mt-1 text-xs text-muted">
-                {agent.category} · {agent.tier} · {agent.ratingStatus}
+                {agent.categoryGroup
+                  ? `${agent.categoryGroup} · ${agent.category}`
+                  : agent.category}{" "}
+                · {agent.tier} · {agent.ratingStatus}
                 {agent.modelAlias ? ` · alias ${agent.modelAlias}` : ""}
               </p>
             </div>

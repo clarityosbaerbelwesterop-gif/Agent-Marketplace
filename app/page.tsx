@@ -15,8 +15,8 @@ const steps = [
   { n: "04", title: "Mietdauer", text: "Optionen aus rental_options." },
   { n: "05", title: "Preis prüfen", text: "Inklusivkontingent liegt offen." },
   { n: "06", title: "Checkout", text: "Stripe Checkout; Aktivierung nur per Webhook." },
-  { n: "07", title: "Chathub", text: "Aktive Miete streamt über UNOROUTER." },
-  { n: "08", title: "Tools", text: "First-Wave-Grants unter /connectors; OAuth wo konfiguriert." },
+  { n: "07", title: "Chathub", text: "Aktive Miete streamt über UNOROUTER, FreeLLM als Failover." },
+  { n: "08", title: "Tools", text: "First-Wave-Grants unter /connectors inkl. Stubs; OAuth wo konfiguriert." },
 ] as const;
 
 export default function HomePage() {
@@ -50,7 +50,7 @@ export default function HomePage() {
             Von der Suche zur Sitzung
           </p>
           <p className="mt-3 text-sm leading-relaxed text-muted">
-            Neon Auth, Catalog API, Stripe Checkout, UNOROUTER und Runtime sind
+            Neon Auth, Catalog API, Stripe Checkout, UNOROUTER, FreeLLM-Failover und Runtime sind
             verdrahtet.
           </p>
         </aside>

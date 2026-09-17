@@ -17,7 +17,7 @@ export function runtimeTools(context: RuntimeContext): ChatTool[] {
       function: {
         name: "memory_write",
         description:
-          "Store a short note, fact, or preference for this user in this workspace.",
+          "Store a short note, fact, or preference. Use visibility=workspace so other concurrent rented agents in this workspace can read it. Default visibility=user is private to this renter. Isolated by Neon Auth user + workspace RLS; no global lock.",
         parameters: {
           type: "object",
           properties: {
@@ -25,6 +25,10 @@ export function runtimeTools(context: RuntimeContext): ChatTool[] {
             kind: {
               type: "string",
               enum: ["note", "fact", "preference"],
+            },
+            visibility: {
+              type: "string",
+              enum: ["user", "workspace"],
             },
           },
           required: ["content"],
@@ -35,7 +39,8 @@ export function runtimeTools(context: RuntimeContext): ChatTool[] {
       type: "function",
       function: {
         name: "memory_search",
-        description: "Read recent memories for this user in this workspace.",
+        description:
+          "Read recent user-private and workspace-shared memories in this workspace (RLS-filtered).",
         parameters: {
           type: "object",
           properties: {
@@ -49,7 +54,7 @@ export function runtimeTools(context: RuntimeContext): ChatTool[] {
       function: {
         name: "list_connector_grants",
         description:
-          "List first-party connectors (neon, github, slack, vercel, supabase, render, stripe, cursor) and this rental's grant status. Does not return secrets.",
+          "List first-party connectors (neon, github, slack, vercel, supabase, render, stripe, cursor, higgsfield, linkedin, meta, google-search) and this rental's grant status. Does not return secrets.",
         parameters: { type: "object", properties: {} },
       },
     },
@@ -99,11 +104,14 @@ export async function executeRuntimeTool(
       const kindRaw = String(args.kind ?? "note");
       const kind =
         kindRaw === "fact" || kindRaw === "preference" ? kindRaw : "note";
+      const visibility =
+        String(args.visibility ?? "user") === "workspace" ? "workspace" : "user";
       const result = await writeMemory({
         userId: context.userId,
         workspaceId: context.rental.workspaceId,
         sessionId: context.session.id,
         kind,
+        visibility,
         content,
       });
       return JSON.stringify(result);
@@ -122,6 +130,7 @@ export async function executeRuntimeTool(
         filtered.map((row) => ({
           id: row.id,
           kind: row.kind,
+          visibility: row.visibility,
           content: row.content,
           createdAt: row.createdAt.toISOString(),
         })),

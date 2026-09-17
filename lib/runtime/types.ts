@@ -2,6 +2,7 @@ import type { AgentTier } from "@/lib/catalog/constants";
 import type { AgentSkill, AgentProfile, AgentRun, AgentSession, Rental } from "@/lib/db";
 import type { PublicConnectorGrant } from "@/lib/connectors";
 import type { ChatMessage, ChatUsage, ModelAlias } from "@/lib/unorouter/types";
+import type { RouteCandidate } from "@/lib/llm";
 
 export type RuntimeContext = {
   userId: string;
@@ -11,7 +12,8 @@ export type RuntimeContext = {
   skill: AgentSkill | null;
   alias: ModelAlias;
   modelIds: string[];
-  memories: Array<{ id: string; kind: string; content: string; createdAt: string }>;
+  route: RouteCandidate[];
+  memories: Array<{ id: string; kind: string; content: string; visibility?: string; createdAt: string }>;
   history: ChatMessage[];
   connectorGrants: PublicConnectorGrant[];
 };
@@ -23,13 +25,29 @@ export type RuntimeEvent =
       sessionId: string;
       rentalId: string;
       modelId: string;
+      provider?: string;
       skillVersion: string | null;
       alias: ModelAlias;
+      downgradedFromPaid?: boolean;
     }
-  | { type: "delta"; text: string }
-  | { type: "tool"; name: string; status: "start" | "done" | "error"; detail?: string }
-  | { type: "status"; status: AgentRun["status"] }
-  | { type: "done"; usage: ChatUsage | null; outputText: string; modelIdUsed: string }
+  | { type: "delta"; text: string; agentName?: string }
+  | {
+      type: "tool";
+      name: string;
+      status: "start" | "done" | "error";
+      detail?: string;
+      agentName?: string;
+    }
+  | { type: "status"; status: AgentRun["status"]; agentName?: string }
+  | {
+      type: "done";
+      usage: ChatUsage | null;
+      outputText: string;
+      modelIdUsed: string;
+      providerUsed?: string;
+      downgradedFromPaid?: boolean;
+      agentName?: string;
+    }
   | { type: "error"; message: string; code: string };
 
 export type ExecuteTurnInput = {
@@ -62,7 +80,7 @@ export const TIER_RUNTIME_POLICY: Record<AgentTier, TierRuntimePolicy> = {
     alias: "advanced",
     maxToolRounds: 4,
     providerRetries: 1,
-    checkResults: false,
+    checkResults: true,
     retryOnCheckFailure: false,
     planning: "structured",
   },
