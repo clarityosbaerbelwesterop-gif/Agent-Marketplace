@@ -50,6 +50,7 @@ export default async function MarketplacePage({
         title="Agenten mieten"
         description="Der Katalog liegt in Postgres. DATABASE_URL fehlt auf diesem Server."
       >
+        <MarketplaceTypeFilters query={parsed} compare={compare} />
         <EmptyState
           title="Katalog nicht verbunden"
           description="Ohne Datenbank wird die 10k-Seed-Liste nicht geladen. Es gibt keinen stillen Fallback auf UI-Fixtures."
