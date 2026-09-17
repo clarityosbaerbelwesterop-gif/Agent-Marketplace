@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createRentalCheckout } from "@/lib/runtime/rentals";
-import { UNPAID_TEST_BILLING } from "@/lib/runtime/unpaid-access";
-import { chatRentalHref } from "@/lib/urls";
+import { rentalCreateRedirectUrl } from "@/lib/runtime/unpaid-access";
 import { parseCreateRentalBody } from "./create-rental-body";
 import { jsonError, readJsonBody, requireApiUser } from "./guard";
 
@@ -31,14 +30,9 @@ export async function postCreateRentalCheckout(
   if (!result.ok) {
     return jsonError(result.error, result.status);
   }
-  const checkoutUrl = result.data.checkoutUrl ?? null;
-  const redirectUrl =
-    checkoutUrl ??
-    (result.data.billing === UNPAID_TEST_BILLING
-      ? chatRentalHref(result.data.id)
-      : null);
+  const redirectUrl = rentalCreateRedirectUrl(result.data);
   const body = options.includeUrlAlias
-    ? { ...result.data, checkoutUrl, url: redirectUrl }
-    : { ...result.data, checkoutUrl };
+    ? { ...result.data, checkoutUrl: result.data.checkoutUrl ?? null, url: redirectUrl }
+    : { ...result.data, checkoutUrl: result.data.checkoutUrl ?? null };
   return NextResponse.json(body, { status: 201 });
 }

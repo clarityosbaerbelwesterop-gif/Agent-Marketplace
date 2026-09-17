@@ -3,13 +3,14 @@ import { and, eq, sql } from "drizzle-orm";
 import { getDb, withUserRls } from "@/lib/db";
 import { connectorGrants, rentals } from "@/lib/db/schema";
 import type { ConnectorCredentials, JsonObject } from "@/lib/db/json";
-import { getConnector, oauthEnvConfigured } from "./registry";
+import { CONNECTOR_REGISTRY, getConnector, oauthEnvConfigured } from "./registry";
 import { canonicalConnectorId } from "./aliases";
 import {
   buildAuthorizeUrl,
   encodeOauthState,
   oauthStateSecretConfigured,
 } from "./oauth";
+import { sanitizePublicMetadata } from "./secrets";
 import { asSqlBoolean, hasStoredCredentials, toApiStatus } from "./status";
 import { CONNECTOR_IDS, type ConnectorId, type PublicConnectorGrant } from "./types";
 
@@ -27,6 +28,14 @@ function asJsonObject(value: unknown): JsonObject {
   return {};
 }
 
+function toIso(value: Date | string): string {
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+/**
+ * Public grant JSON. Never copies credentials, tokens, apiKeys, or secret metadata.
+ * `hasCredentials` is a boolean only — callers must not round-trip the blob.
+ */
 export function toPublicGrant(row: {
   id: string;
   provider: string;
@@ -34,22 +43,58 @@ export function toPublicGrant(row: {
   status: string;
   metadata: unknown;
   credentials?: unknown;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Date | string;
+  updatedAt: Date | string;
   hasCredentials?: boolean;
 }): PublicConnectorGrant {
   return {
     id: row.id,
     provider: row.provider,
-    scopes: row.scopes,
+    scopes: [...row.scopes],
     status: toApiStatus(row.status),
     hasCredentials: asSqlBoolean(row.hasCredentials)
       ? true
       : hasStoredCredentials(row.credentials ?? null),
-    metadata: asJsonObject(row.metadata),
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
+    metadata: sanitizePublicMetadata(row.metadata),
+    createdAt: toIso(row.createdAt),
+    updatedAt: toIso(row.updatedAt),
   };
+}
+
+/** Pending stub inserted on rental activation. Never granted. Never has tokens. */
+export function pendingGrantStubRow(input: {
+  userId: string;
+  workspaceId: string;
+  provider: ConnectorId;
+}) {
+  const definition = CONNECTOR_REGISTRY[input.provider];
+  return {
+    workspaceId: input.workspaceId,
+    userId: input.userId,
+    provider: input.provider,
+    scopes: [...definition.requiredScopes],
+    status: "pending" as const,
+    credentials: null,
+    metadata: {
+      source: "rental_activation",
+      authMethod: definition.oauth ? "oauth" : "api_key",
+    },
+  };
+}
+
+export function pendingGrantStubsForWorkspace(input: {
+  userId: string;
+  workspaceId: string;
+  providers?: readonly ConnectorId[];
+}) {
+  const providers = input.providers ?? CONNECTOR_IDS;
+  return providers.map((provider) =>
+    pendingGrantStubRow({
+      userId: input.userId,
+      workspaceId: input.workspaceId,
+      provider,
+    }),
+  );
 }
 
 export async function listConnectorGrants(userId: string, workspaceId: string) {
@@ -419,8 +464,10 @@ export async function revokeConnectorGrant(input: {
 }
 
 /**
- * After a signed webhook activates a rental, insert pending grant stubs
- * for the first-wave connectors. Does not mark them active or invent OAuth.
+ * After Stripe webhook activation *or* unpaid_test create, insert pending
+ * grant stubs for every first-party registry id. Privileged insert so this
+ * does not depend on a user JWT. Existing rows (including granted credentials)
+ * are left alone. Never marks grants granted or invents tokens.
  */
 export async function ensurePendingConnectorGrantsForRental(rentalId: string) {
   const db = getDb();
@@ -438,11 +485,23 @@ export async function ensurePendingConnectorGrantsForRental(rentalId: string) {
     return;
   }
 
-  for (const provider of CONNECTOR_IDS) {
-    await requestConnectorGrant({
-      userId: row.userId,
-      workspaceId: row.workspaceId,
-      provider,
+  const now = new Date();
+  const values = pendingGrantStubsForWorkspace({
+    userId: row.userId,
+    workspaceId: row.workspaceId,
+  }).map((stub) => ({
+    ...stub,
+    updatedAt: now,
+  }));
+
+  await db
+    .insert(connectorGrants)
+    .values(values)
+    .onConflictDoNothing({
+      target: [
+        connectorGrants.workspaceId,
+        connectorGrants.userId,
+        connectorGrants.provider,
+      ],
     });
-  }
 }

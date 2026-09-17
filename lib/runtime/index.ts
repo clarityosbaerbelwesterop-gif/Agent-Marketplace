@@ -31,6 +31,7 @@ export {
   isUnpaidAccessAllowed,
   inferRentalBilling,
   resolveRentalCreateMode,
+  rentalCreateRedirectUrl,
   UNPAID_TEST_BILLING,
 } from "./unpaid-access";
 export {

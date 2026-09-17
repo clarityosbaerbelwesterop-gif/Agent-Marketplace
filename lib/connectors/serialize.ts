@@ -1,10 +1,17 @@
 import { CONNECTOR_LIST, oauthEnvConfigured } from "./registry";
 import { canonicalConnectorId } from "./aliases";
+import { toPublicGrant } from "./grants";
 import type { ConnectorCatalogItem, PublicConnectorGrant } from "./types";
 import type { AgentConnectorSpec } from "@/lib/db/json";
 
+function asPublicGrant(
+  grant: PublicConnectorGrant | Parameters<typeof toPublicGrant>[0],
+): PublicConnectorGrant {
+  return toPublicGrant(grant);
+}
+
 export function connectorCatalog(
-  grants: PublicConnectorGrant[] = [],
+  grants: Array<PublicConnectorGrant | Parameters<typeof toPublicGrant>[0]> = [],
 ): ConnectorCatalogItem[] {
   return CONNECTOR_LIST.map((definition) => {
     const grant =
@@ -12,7 +19,8 @@ export function connectorCatalog(
     return {
       ...definition,
       oauthConfigured: oauthEnvConfigured(definition),
-      grant,
+      grantable: true as const,
+      grant: grant ? asPublicGrant(grant) : null,
     };
   });
 }

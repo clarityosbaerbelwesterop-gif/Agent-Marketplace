@@ -3,6 +3,7 @@
  * Gated by MARKETPLACE_ALLOW_UNPAID_ACCESS=1 or true. Unset in production.
  */
 
+import { chatRentalHref } from "@/lib/urls";
 import { STRIPE_NOT_CONFIGURED, isStripeConfigured } from "@/lib/stripe/config";
 import type { RentalBilling } from "@/types/billing";
 
@@ -57,4 +58,23 @@ export function inferRentalBilling(rental: {
     return UNPAID_TEST_BILLING;
   }
   return STRIPE_BILLING;
+}
+
+/**
+ * After create: hosted Checkout URL, or `/chat?rentalId=` for unpaid_test.
+ * Pending Stripe rentals have no chat URL until the webhook activates them.
+ */
+export function rentalCreateRedirectUrl(data: {
+  id: string;
+  billing?: string;
+  checkoutUrl?: string | null;
+  chatUrl?: string | null;
+}): string | null {
+  if (typeof data.checkoutUrl === "string" && data.checkoutUrl.startsWith("https://")) {
+    return data.checkoutUrl;
+  }
+  if (data.billing === UNPAID_TEST_BILLING) {
+    return data.chatUrl ?? chatRentalHref(data.id);
+  }
+  return typeof data.chatUrl === "string" ? data.chatUrl : null;
 }

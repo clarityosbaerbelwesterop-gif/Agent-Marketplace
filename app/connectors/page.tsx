@@ -12,6 +12,7 @@ import {
   listRentals,
   rentalIsActive,
 } from "@/lib/runtime/rentals";
+import { isUnpaidAccessAllowed } from "@/lib/runtime/unpaid-access";
 import { chatRentalHref, rentalCheckoutHref } from "@/lib/urls";
 import { firstSearchParam } from "@/lib/utils";
 
@@ -31,6 +32,7 @@ export default async function ConnectorsPage({
   const connected = firstSearchParam(params.connected);
   const error = firstSearchParam(params.error);
   const session = await getVerifiedSession();
+  const unpaidAccess = isUnpaidAccessAllowed();
 
   if (!session?.user) {
     return (
@@ -76,12 +78,20 @@ export default async function ConnectorsPage({
     return (
       <PageShell
         title="Konnektoren"
-        description="Wählen Sie eine per Webhook aktivierte Miete. Grants liegen pro User und Workspace. Öffentliche MCP-Suche unter /connectors/discover ist nicht grantable."
+        description={
+          unpaidAccess
+            ? "Wählen Sie eine aktive Miete (Zahlungsbestätigung oder Staging unpaid_test). Grants liegen pro User und Workspace. Öffentliche MCP-Suche unter /connectors/discover ist nicht grantable."
+            : "Wählen Sie eine nach Zahlungsbestätigung aktivierte Miete. Grants liegen pro User und Workspace. Öffentliche MCP-Suche unter /connectors/discover ist nicht grantable."
+        }
       >
         {active.length === 0 ? (
           <EmptyState
             title="Keine aktive Miete"
-            description="Bezahlen Sie auf einem Agentenprofil. Ausstehende Checkouts schalten keine Konnektoren frei."
+            description={
+              unpaidAccess
+                ? "Starten Sie eine Testmiete über ein Agentenprofil. Ausstehende Checkouts schalten keine Konnektoren frei."
+                : "Bezahlen Sie auf einem Agentenprofil. Ausstehende Checkouts schalten keine Konnektoren frei."
+            }
             actionHref="/marketplace"
             actionLabel="Marktplatz öffnen"
           />

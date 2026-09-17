@@ -7,6 +7,7 @@ import { isDatabaseConfigured } from "@/lib/catalog/queries";
 import { listRentals, rentalIsActive } from "@/lib/runtime/rentals";
 import { listRooms } from "@/lib/runtime/agent-rooms";
 import { CreateRoomForm } from "@/components/rooms/create-room-form";
+import { isUnpaidAccessAllowed } from "@/lib/runtime/unpaid-access";
 
 export const metadata: Metadata = {
   title: "Räume",
@@ -17,6 +18,7 @@ export const dynamic = "force-dynamic";
 
 export default async function RoomsPage() {
   const session = await getVerifiedSession();
+  const unpaidAccess = isUnpaidAccessAllowed();
   if (!session?.user) {
     return (
       <PageShell title="Räume" description="Anmeldung nötig.">
@@ -55,7 +57,11 @@ export default async function RoomsPage() {
       {active.length < 2 ? (
         <EmptyState
           title="Zu wenige aktive Mieten"
-          description="Mieten Sie mindestens zwei Agenten (Zahlung muss bestätigt sein)."
+          description={
+            unpaidAccess
+              ? "Mieten Sie mindestens zwei Agenten (Testmodus oder bestätigte Zahlung). Ausstehende Checkouts zählen nicht."
+              : "Mieten Sie mindestens zwei Agenten (Zahlung muss bestätigt sein)."
+          }
           actionHref="/marketplace"
           actionLabel="Marktplatz"
         />

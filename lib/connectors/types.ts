@@ -1,6 +1,7 @@
 import type { ConnectorCredentials, JsonObject } from "@/lib/db/json";
 
-export const CONNECTOR_IDS = [
+/** First-wave tenant connectors: requestable/grantable during an active rental. */
+export const FIRST_WAVE_CONNECTOR_IDS = [
   "neon",
   "github",
   "slack",
@@ -9,12 +10,23 @@ export const CONNECTOR_IDS = [
   "render",
   "stripe",
   "cursor",
+] as const;
+
+/** Catalog + pending grant stubs only. No invented OAuth. */
+export const SECOND_WAVE_CONNECTOR_IDS = [
   "higgsfield",
   "linkedin",
   "meta",
   "google-search",
 ] as const;
 
+export const CONNECTOR_IDS = [
+  ...FIRST_WAVE_CONNECTOR_IDS,
+  ...SECOND_WAVE_CONNECTOR_IDS,
+] as const;
+
+export type FirstWaveConnectorId = (typeof FIRST_WAVE_CONNECTOR_IDS)[number];
+export type SecondWaveConnectorId = (typeof SECOND_WAVE_CONNECTOR_IDS)[number];
 export type ConnectorId = (typeof CONNECTOR_IDS)[number];
 
 export type ConnectorCapabilityTag =
@@ -70,6 +82,8 @@ export type PublicConnectorGrant = {
 
 export type ConnectorCatalogItem = ConnectorDefinition & {
   oauthConfigured: boolean;
+  /** First-party registry connectors are grantable; discovered MCP servers are not. */
+  grantable: true;
   grant: PublicConnectorGrant | null;
 };
 

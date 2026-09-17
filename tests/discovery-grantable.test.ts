@@ -64,6 +64,7 @@ describe("discovery grantable: false invariant", () => {
     assert.equal(result.catalogOnly, true);
     assert.equal(discoveryItemsAreCatalogOnly(result.items), true);
     assert.ok(result.grantableConnectorIds.includes("github"));
+    assert.ok(result.grantableConnectorIds.includes("neon"));
     assert.equal(result.items[0]?.grantable, false);
   });
 });
