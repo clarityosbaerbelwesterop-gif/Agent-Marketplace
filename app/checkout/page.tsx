@@ -5,6 +5,7 @@ import { ResumeCheckoutForm } from "@/components/resume-checkout-form";
 import { getVerifiedSession } from "@/lib/auth/server";
 import { isDatabaseConfigured } from "@/lib/catalog/queries";
 import { getRentalForUser, rentalIsActive } from "@/lib/runtime/rentals";
+import { CONNECTOR_LIST } from "@/lib/connectors";
 
 export const metadata: Metadata = {
   title: "Checkout",
@@ -54,6 +55,11 @@ export default async function CheckoutPage({
           <Link className="underline underline-offset-4" href="/marketplace">
             Browse the catalog
           </Link>
+        </p>
+        <p className="text-sm text-muted">
+          First-wave connectors (grant stubs after payment, not live OAuth by
+          default):{" "}
+          {CONNECTOR_LIST.map((row) => row.displayName).join(", ")}.
         </p>
       </PageShell>
     );

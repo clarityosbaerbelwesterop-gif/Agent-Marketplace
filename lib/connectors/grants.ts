@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
-import { withUserRls } from "@/lib/db";
-import { connectorGrants } from "@/lib/db/schema";
+import { getDb, withUserRls } from "@/lib/db";
+import { connectorGrants, rentals } from "@/lib/db/schema";
 import type { ConnectorCredentials, JsonObject } from "@/lib/db/json";
 import { getConnector, oauthEnvConfigured } from "./registry";
 import { canonicalConnectorId } from "./aliases";
@@ -11,10 +11,7 @@ import {
   oauthStateSecretConfigured,
 } from "./oauth";
 import { asSqlBoolean, hasStoredCredentials, toApiStatus } from "./status";
-import type {
-  ConnectorId,
-  PublicConnectorGrant,
-} from "./types";
+import { CONNECTOR_IDS, type ConnectorId, type PublicConnectorGrant } from "./types";
 
 function connectorDefinitionFromInput(provider: string) {
   const raw = provider.trim().toLowerCase();
@@ -419,4 +416,33 @@ export async function revokeConnectorGrant(input: {
     },
   });
   return { ok: true, data: toPublicGrant(row) };
+}
+
+/**
+ * After a signed webhook activates a rental, insert pending grant stubs
+ * for the first-wave connectors. Does not mark them active or invent OAuth.
+ */
+export async function ensurePendingConnectorGrantsForRental(rentalId: string) {
+  const db = getDb();
+  const [row] = await db
+    .select({
+      userId: rentals.userId,
+      workspaceId: rentals.workspaceId,
+      status: rentals.status,
+    })
+    .from(rentals)
+    .where(eq(rentals.id, rentalId))
+    .limit(1);
+
+  if (!row || row.status !== "active") {
+    return;
+  }
+
+  for (const provider of CONNECTOR_IDS) {
+    await requestConnectorGrant({
+      userId: row.userId,
+      workspaceId: row.workspaceId,
+      provider,
+    });
+  }
 }

@@ -7,6 +7,13 @@ import type { ConnectorId } from "./types";
  */
 const CATALOG_PROVIDER_ALIASES: Record<string, ConnectorId> = {
   postgres: "neon",
+  figma: "vercel",
+  browser: "github",
+  web: "vercel",
+  docs: "github",
+  analytics: "stripe",
+  crm: "stripe",
+  issues: "github",
 };
 
 export function canonicalConnectorId(provider: string): ConnectorId | null {

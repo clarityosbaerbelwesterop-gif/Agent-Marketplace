@@ -5,6 +5,7 @@ import { PageShell } from "@/components/page-shell";
 import { StartRentalCheckoutForm } from "@/components/start-rental-checkout-form";
 import { getVerifiedSession } from "@/lib/auth/server";
 import { getAgentBySlug, isDatabaseConfigured } from "@/lib/catalog/queries";
+import { mergeAgentAndSupportedConnectors } from "@/lib/connectors";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,7 @@ export default async function AgentPage({ params }: AgentPageProps) {
   }
 
   const durations = agent.rentalOptions.durations ?? [];
+  const connectors = mergeAgentAndSupportedConnectors(agent.connectors ?? []);
 
   return (
     <PageShell title={agent.name} description={agent.tagline ?? agent.description}>
@@ -94,6 +96,8 @@ export default async function AgentPage({ params }: AgentPageProps) {
               durations={durations.map((duration) => ({
                 id: duration.id,
                 label: duration.label,
+                priceCents: duration.priceCents,
+                currency: duration.currency,
               }))}
             />
           ) : (
@@ -106,6 +110,26 @@ export default async function AgentPage({ params }: AgentPageProps) {
           )}
         </section>
       ) : null}
+
+      <section className="flex flex-col gap-2">
+        <h2 className="text-sm font-medium">Connectors</h2>
+        <p className="text-sm text-muted">
+          First-wave grants during a rental: Neon, GitHub, Slack, Vercel,
+          Supabase, Render, Stripe, Cursor. OAuth/API keys are tenant grants —
+          not marketplace Checkout and not live until configured.
+        </p>
+        <ul className="text-sm text-muted">
+          {connectors.map((connector) => (
+            <li key={connector.provider}>
+              {connector.provider}
+              {connector.required ? " (required)" : ""}
+              {connector.scopes && connector.scopes.length > 0
+                ? ` · ${connector.scopes.join(", ")}`
+                : ""}
+            </li>
+          ))}
+        </ul>
+      </section>
 
       {agent.skills.length > 0 ? (
         <section className="flex flex-col gap-2">

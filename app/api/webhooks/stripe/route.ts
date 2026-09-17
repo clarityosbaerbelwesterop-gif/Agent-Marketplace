@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
 import { jsonError } from "@/lib/api/guard";
+import { isDatabaseConfigured } from "@/lib/catalog/queries";
+import { ensurePendingConnectorGrantsForRental } from "@/lib/connectors";
 import {
   STRIPE_WEBHOOK_NOT_CONFIGURED,
   constructStripeEvent,
   isStripeWebhookConfigured,
   processStripeEvent,
 } from "@/lib/stripe";
-import { isDatabaseConfigured } from "@/lib/catalog/queries";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 /**
  * Stripe signs this request. Do not trust `/chat?rentalId=` redirects.
@@ -30,5 +32,12 @@ export async function POST(request: Request) {
   }
 
   const result = await processStripeEvent(verified.event);
+  if (!result.duplicate && result.rentalId) {
+    try {
+      await ensurePendingConnectorGrantsForRental(result.rentalId);
+    } catch {
+      // Payment already applied. Grant stubs are best-effort metadata.
+    }
+  }
   return NextResponse.json({ received: true, ...result });
 }
