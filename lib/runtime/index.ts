@@ -2,10 +2,13 @@ export { loadRuntimeContext, connectorsForContext } from "./context";
 export { executeTurn } from "./execute";
 export { listMemories, writeMemory } from "./memory";
 export {
-  createUnpaidRental,
+  createRentalCheckout,
   listRentals,
   rentalIsActive,
   getRentalForUser,
+  resumeRentalCheckout,
+  renewRentalCheckout,
+  serializeRental,
 } from "./rentals";
 export {
   getOrCreateOpenSession,

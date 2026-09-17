@@ -11,7 +11,9 @@ import type {
   connectorGrants,
   favorites,
   memories,
+  rentalPayments,
   rentals,
+  stripeEvents,
   workspaceMembers,
   workspaces,
 } from "./schema";
@@ -33,6 +35,11 @@ export type NewFavorite = typeof favorites.$inferInsert;
 
 export type Rental = typeof rentals.$inferSelect;
 export type NewRental = typeof rentals.$inferInsert;
+
+export type RentalPayment = typeof rentalPayments.$inferSelect;
+export type NewRentalPayment = typeof rentalPayments.$inferInsert;
+
+export type StripeEventRow = typeof stripeEvents.$inferSelect;
 
 export type AgentSession = typeof agentSessions.$inferSelect;
 export type NewAgentSession = typeof agentSessions.$inferInsert;

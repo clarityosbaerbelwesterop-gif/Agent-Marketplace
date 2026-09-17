@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { jsonError, readJsonBody, requireApiUser } from "@/lib/api/guard";
-import { createUnpaidRental, listRentals } from "@/lib/runtime/rentals";
+import { createRentalCheckout, listRentals } from "@/lib/runtime/rentals";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     return jsonError("Invalid JSON", 400);
   }
   const payload = body as { slug?: unknown; durationId?: unknown };
-  const result = await createUnpaidRental({
+  const result = await createRentalCheckout({
     userId: auth.userId,
     slug: String(payload.slug ?? ""),
     durationId:

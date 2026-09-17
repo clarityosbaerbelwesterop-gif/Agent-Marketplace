@@ -10,7 +10,7 @@ export default function HomePage() {
   return (
     <PageShell
       title="Rent AI agents"
-      description="Browse a paginated catalog of rentable agents. Sign in with Neon Auth. Chat uses UNOROUTER once a key is set. Stripe checkout is not implemented."
+      description="Browse a paginated catalog of rentable agents. Sign in with Neon Auth. Pay with Stripe Checkout. Chat uses UNOROUTER once a key is set."
     >
       <ul className="flex flex-col gap-3 text-sm">
         <li>

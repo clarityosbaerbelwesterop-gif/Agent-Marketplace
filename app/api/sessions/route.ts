@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     return jsonError(result.error, result.status);
   }
   if (!rentalIsActive(result.data.rental)) {
-    return jsonError("Rental is not active", 409);
+    return jsonError("Rental is not active or has expired", 409);
   }
   return NextResponse.json({
     session: {

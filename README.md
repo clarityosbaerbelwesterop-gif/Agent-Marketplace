@@ -1,6 +1,6 @@
 # Agent Marketplace
 
-Greenfield Next.js (App Router) app for a **rentable AI-agent marketplace**. Neon Auth, a paginated catalog API, a privileged ~10k agent seed, the UNOROUTER adapter, and the agent runtime (sessions, runs, streaming chat) are wired. Stripe checkout is not.
+Greenfield Next.js (App Router) app for a **rentable AI-agent marketplace**. Neon Auth, a paginated catalog API, a privileged ~10k agent seed, the UNOROUTER adapter, the agent runtime (sessions, runs, streaming chat), and Stripe Checkout + signed webhooks are wired.
 
 ## Stack
 
@@ -55,10 +55,10 @@ Copy `.env.example` to `.env.local`. Expected variables (fill from your own Neon
 - `DATABASE_URL_UNPOOLED` (direct URI for drizzle-kit)
 - `DATABASE_AUTHENTICATED_URL` (optional RLS-scoped LOGIN role)
 - Neon Auth: `NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET`, `NEXT_PUBLIC_NEON_AUTH_URL`, `NEON_AUTH_JWKS_URL`
-- Stripe: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
+- Stripe: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` (webhook: `POST /api/webhooks/stripe`)
 - `UNOROUTER_API_KEY` (optional `UNOROUTER_BASE_URL`, `UNOROUTER_MODEL_*` alias overrides)
 
-Neon Auth is wired at `/login` and `/api/auth/[...path]`. Stripe checkout is not. Do not commit `.env.local`. See `AGENTS.md` for schema, RLS, auth, and seed rules.
+Neon Auth is wired at `/login` and `/api/auth/[...path]`. Stripe Checkout is wired; rentals become `active` only after a signed webhook. Do not commit `.env.local`. See `AGENTS.md` for schema, RLS, auth, and seed rules.
 
 ## Project layout
 
@@ -70,6 +70,7 @@ lib/auth/       # Neon Auth server + actions
 lib/catalog/    # paginated catalog queries
 lib/unorouter/  # UnoRouter adapter + alias map
 lib/runtime/    # sessions, runs, memories, connectors
+lib/stripe/     # Checkout + signed webhooks
 lib/db/         # Drizzle schema + clients
 drizzle/        # SQL migrations
 scripts/        # privileged seed
@@ -83,13 +84,16 @@ See `AGENTS.md` for conventions for coding agents.
 - `/` — home
 - `/marketplace` — paginated catalog (server-side; never dumps the full list)
 - `/agents/[slug]` — agent detail from Postgres
-- `/checkout` — checkout shell (not a Stripe integration)
-- `/chat` — rental chat (SSE); requires an active unpaid-access rental
+- `/checkout` → Stripe Checkout resume for a pending rental (`?rentalId=`). Not a fake card form.
+- `/chat` — rental chat (SSE); requires a webhook-activated rental
 - `/login` — Neon Auth sign-in / sign-up / sign-out
 - `GET /api/agents` — catalog JSON (search, category, tier, sort, page, pageSize)
 - `GET /api/agents/[slug]` — detail JSON
 - `GET|POST /api/favorites`, `DELETE /api/favorites/[slug]` — session required
-- `GET|POST /api/rentals` — unpaid access (not Stripe)
+- `GET|POST /api/rentals` — list / create pending rental + Stripe Checkout Session
+- `POST /api/rentals/[id]/checkout` — resume Checkout
+- `POST /api/rentals/[id]/renew` — extend via Checkout
+- `POST /api/webhooks/stripe` — signed Stripe events (idempotent)
 - `POST /api/chat` — stream or background run
 - `GET /api/sessions/[id]`, `GET /api/runs/[id]`
 - `GET|POST /api/memories`
