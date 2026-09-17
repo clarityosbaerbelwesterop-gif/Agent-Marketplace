@@ -13,6 +13,7 @@ export function StartRentalCheckoutForm({
   slug,
   durations,
   durationId,
+  unpaidPreview = false,
 }: {
   slug: string;
   durations: Array<{
@@ -22,6 +23,7 @@ export function StartRentalCheckoutForm({
     currency?: string;
   }>;
   durationId?: string;
+  unpaidPreview?: boolean;
 }) {
   const [state, action, pending] = useActionState(
     startRentalCheckout,
@@ -35,7 +37,7 @@ export function StartRentalCheckoutForm({
   return (
     <form action={action} className="flex max-w-xl flex-col gap-3">
       <input type="hidden" name="slug" value={slug} />
-      {durations.length > 0 && !durationId ? (
+      {unpaidPreview ? null : durations.length > 0 && !durationId ? (
         <Field id="durationId" label="Mietdauer">
           <Select
             id="durationId"
@@ -58,9 +60,9 @@ export function StartRentalCheckoutForm({
         <input type="hidden" name="durationId" value={selectedId} />
       ) : null}
       <p className="text-sm text-muted">
-        Weiter zu Stripe Checkout zum Katalogpreis. Zugang bleibt ausstehend,
-        bis der Webhook die Zahlung bestätigt — der Erfolg-Redirect allein
-        aktiviert die Miete nicht.
+        {unpaidPreview
+          ? "Staging: startet eine 1-Stunden-Vorschau ohne Stripe. Kein Zahlungsformular, kein Checkout."
+          : "Weiter zu Stripe Checkout zum Katalogpreis. Zugang bleibt ausstehend, bis der Webhook die Zahlung bestätigt — der Erfolg-Redirect allein aktiviert die Miete nicht."}
       </p>
       {state?.error ? (
         <p className="text-sm text-danger" role="alert">
@@ -68,7 +70,13 @@ export function StartRentalCheckoutForm({
         </p>
       ) : null}
       <Button type="submit" disabled={pending}>
-        {pending ? "Weiterleitung zu Stripe…" : "Weiter zu Stripe Checkout"}
+        {unpaidPreview
+          ? pending
+            ? "Vorschau wird gestartet…"
+            : "1-Stunden-Vorschau starten"
+          : pending
+            ? "Weiterleitung zu Stripe…"
+            : "Weiter zu Stripe Checkout"}
       </Button>
     </form>
   );

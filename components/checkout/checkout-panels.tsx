@@ -13,9 +13,11 @@ import type { AgentDetail } from "@/lib/catalog/types";
 export function CheckoutSummary({
   agent,
   durationId,
+  unpaidPreview = false,
 }: {
   agent: AgentDetail;
   durationId?: string;
+  unpaidPreview?: boolean;
 }) {
   const duration = pickDuration(agent, durationId);
   const durations = listDurations(agent);
@@ -33,35 +35,51 @@ export function CheckoutSummary({
           </div>
         </div>
       </CardHeader>
-      <DurationOptions
-        durations={durations}
-        selectedId={duration?.id}
-        hrefFor={(id) => checkoutHref(agent.slug, id)}
-      />
-      {duration ? (
+      {!unpaidPreview ? (
+        <>
+          <DurationOptions
+            durations={durations}
+            selectedId={duration?.id}
+            hrefFor={(id) => checkoutHref(agent.slug, id)}
+          />
+          {duration ? (
+            <dl className="grid gap-3 border-t border-border pt-4 text-sm">
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted">Dauer</dt>
+                <dd>{duration.label}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted">Inklusive Nutzung</dt>
+                <dd className="text-right">{formatUsage(agent, duration)}</dd>
+              </div>
+              <div className="flex justify-between gap-4 border-t border-border pt-3 text-base font-medium">
+                <dt>Zwischensumme</dt>
+                <dd className="tabular">
+                  {formatMoney({
+                    amountCents: duration.priceCents,
+                    currency: duration.currency,
+                  })}
+                </dd>
+              </div>
+            </dl>
+          ) : null}
+        </>
+      ) : (
         <dl className="grid gap-3 border-t border-border pt-4 text-sm">
           <div className="flex justify-between gap-4">
-            <dt className="text-muted">Dauer</dt>
-            <dd>{duration.label}</dd>
+            <dt className="text-muted">Vorschau</dt>
+            <dd>1 Stunde</dd>
           </div>
           <div className="flex justify-between gap-4">
-            <dt className="text-muted">Inklusive Nutzung</dt>
-            <dd className="text-right">{formatUsage(agent, duration)}</dd>
-          </div>
-          <div className="flex justify-between gap-4 border-t border-border pt-3 text-base font-medium">
-            <dt>Zwischensumme</dt>
-            <dd className="tabular">
-              {formatMoney({
-                amountCents: duration.priceCents,
-                currency: duration.currency,
-              })}
-            </dd>
+            <dt className="text-muted">Preis</dt>
+            <dd>Kein Stripe, keine Zahlung</dd>
           </div>
         </dl>
-      ) : null}
+      )}
       <p className="text-xs leading-relaxed text-muted">
-        Hosted Stripe Checkout (`mode=payment`). Die Miete bleibt `pending`, bis
-        der signierte Webhook bestätigt — nicht durch diese Seite.
+        {unpaidPreview
+          ? "Staging-Vorschau (`MARKETPLACE_ALLOW_UNPAID_ACCESS=true`): 1 Stunde Chat ohne Zahlung. Katalogpreise gelten nicht."
+          : "Hosted Stripe Checkout (`mode=payment`). Die Miete bleibt `pending`, bis der signierte Webhook bestätigt — nicht durch diese Seite."}
       </p>
     </Card>
   );
@@ -71,10 +89,12 @@ export function CheckoutPayPanel({
   agent,
   durationId,
   signedIn,
+  unpaidPreview = false,
 }: {
   agent: AgentDetail;
   durationId?: string;
   signedIn: boolean;
+  unpaidPreview?: boolean;
 }) {
   const durations = listDurations(agent);
 
@@ -82,11 +102,15 @@ export function CheckoutPayPanel({
     <Card className="flex flex-col gap-5">
       <CardHeader>
         <div className="flex flex-wrap items-center gap-2">
-          <CardTitle>Zahlung</CardTitle>
-          <Badge tone="outline">Stripe Checkout</Badge>
+          <CardTitle>{unpaidPreview ? "Vorschau" : "Zahlung"}</CardTitle>
+          <Badge tone="outline">
+            {unpaidPreview ? "Staging, ohne Stripe" : "Stripe Checkout"}
+          </Badge>
         </div>
         <p className="text-sm leading-relaxed text-muted">
-          Kein Kartenformular auf dieser Seite. Stripe hostet die Zahlung.
+          {unpaidPreview
+            ? "Kein Zahlungs-UI. Angemeldete Nutzer aktivieren eine kurze Vorschau-Miete und gehen direkt in den Chat."
+            : "Kein Kartenformular auf dieser Seite. Stripe hostet die Zahlung."}
         </p>
       </CardHeader>
       {signedIn ? (
@@ -99,13 +123,16 @@ export function CheckoutPayPanel({
             currency: item.currency,
           }))}
           durationId={durationId}
+          unpaidPreview={unpaidPreview}
         />
       ) : (
         <p className="text-sm text-muted">
           <ButtonLink href="/login" variant="secondary" size="sm">
             Anmelden
           </ButtonLink>{" "}
-          um mit Stripe zu bezahlen.
+          {unpaidPreview
+            ? "um die Staging-Vorschau zu starten."
+            : "um mit Stripe zu bezahlen."}
         </p>
       )}
     </Card>

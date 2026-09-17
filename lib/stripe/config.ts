@@ -1,7 +1,9 @@
 /**
  * Stripe env helpers. Deploy/secrets own the live keys; this module only
  * reads `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and the public key.
- * Missing secrets must fail closed — never fall back to unpaid access.
+ * Missing secrets must fail closed here. Staging preview rentals are a
+ * separate env flag (`MARKETPLACE_ALLOW_UNPAID_ACCESS`) in `lib/runtime/unpaid-access.ts`,
+ * not a Stripe fallback.
  */
 
 export const STRIPE_NOT_CONFIGURED =

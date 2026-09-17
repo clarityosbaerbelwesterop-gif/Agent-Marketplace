@@ -29,8 +29,9 @@ export async function postCreateRentalCheckout(
   if (!result.ok) {
     return jsonError(result.error, result.status);
   }
+  const redirectUrl = result.data.checkoutUrl ?? result.data.chatUrl;
   const body = options.includeUrlAlias
-    ? { ...result.data, url: result.data.checkoutUrl }
+    ? { ...result.data, url: redirectUrl }
     : result.data;
   return NextResponse.json(body, { status: 201 });
 }

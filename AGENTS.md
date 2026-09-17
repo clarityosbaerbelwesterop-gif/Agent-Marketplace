@@ -12,7 +12,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 This repository is a rentable AI-agent marketplace: browse agents, rent access with Stripe Checkout, chat with a rented agent, and pay through Stripe. Auth, paginated catalog API, a privileged 10k-row seed, the UNOROUTER adapter, and the agent runtime (sessions/runs/streaming) are in place. Stripe Checkout + signed webhooks activate rentals; keys are env-driven (deploy owns secrets). The Design/UI layer styles those flows; it does not replace the catalog with fixtures.
 
-Do not ship a mock Stripe checkout that looks real. Do not invent benchmarks, success rates, or user counts on catalog rows. Do not send the full catalog to the browser — always paginate server-side. Do not re-seed the 10k catalog unless the generator itself changed. Do not activate a rental from a client success redirect. `lib/fixtures/` is a small design sample set, not live inventory.
+Do not ship a mock Stripe checkout that looks real. Do not invent benchmarks, success rates, or user counts on catalog rows. Do not send the full catalog to the browser — always paginate server-side. Do not re-seed the 10k catalog unless the generator itself changed. Do not activate a rental from a client success redirect. `lib/fixtures/` is a small design sample set, not live inventory. Staging preview (`MARKETPLACE_ALLOW_UNPAID_ACCESS=true`) is an explicit unpaid rental, not a fake Checkout page.
 
 ## Stack
 
@@ -27,7 +27,7 @@ Integrations:
 
 - Lakebase Postgres via Neon (`DATABASE_URL`) — schema + RLS in this repo
 - Neon Auth (Managed Better Auth) via `@neondatabase/auth` — tables already exist in schema `neon_auth`; do **not** recreate them or add a second auth library
-- Stripe billing — official `stripe` SDK. Secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`. `POST /api/rentals` and `POST /api/checkout` create `rentals.status=pending` and a Checkout Session (`mode=payment`; catalog durations are one-time hour windows, not subscriptions). `POST /api/webhooks/stripe` verifies the signature and is the only path that sets `active`, `starts_at` / `ends_at`, and Stripe ids. Success URL is `/chat?rentalId=` but must not be trusted. Missing keys → HTTP 503 (no unpaid bypass).
+- Stripe billing — official `stripe` SDK. Secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`. `POST /api/rentals` and `POST /api/checkout` create `rentals.status=pending` and a Checkout Session (`mode=payment`; catalog durations are one-time hour windows, not subscriptions). `POST /api/webhooks/stripe` verifies the signature and is the only **paid** path that sets `active`, `starts_at` / `ends_at`, and Stripe ids. Success URL is `/chat?rentalId=` but must not be trusted. Missing keys → HTTP 503. Staging exception: `MARKETPLACE_ALLOW_UNPAID_ACCESS=true` (or `1`) lets an authenticated user activate a 1-hour preview rental and chat without Checkout (no fake payment UI). Unset/false keeps the production Stripe gate.
 - Model routing via UnoRouter (`UNOROUTER_API_KEY`, optional `UNOROUTER_BASE_URL`) plus optional FreeLLM-API failover (`FREELLM_API_KEY`, optional `FREELLM_BASE_URL`). Catalog rows still store **model aliases** (`standard` / `advanced` / `expert` / `elite` / `frontier`). `lib/unorouter/` maps those aliases to documented UnoRouter model IDs. `lib/freellm/` is an OpenAI-compatible adapter for a self-hosted FreeLLM `/v1` router (documented `auto` / `auto:smart` / `auto:fast` strategies). Paid/Frontier turns prefer UNOROUTER; FreeLLM is failover / high-volume continuation. Same-tier UNOROUTER fallbacks never silently downgrade a premium alias to a much weaker model. If a paid alias is served by FreeLLM, the run records `provider_used`, the actual routed model id, and `downgradedFromPaid`. Missing keys → HTTP 503 (no unpaid bypass); either provider is enough to start a turn.
 
 Use **one** auth system (Neon Auth). Do not introduce a second auth library.
@@ -76,7 +76,7 @@ Route files live next to the URL they represent:
 - `GET /api/agents/compare` → side-by-side catalog fields for up to 4 slugs (no invented benchmarks)
 - `GET /api/agents/[slug]` → agent detail + published skill package
 - `GET|POST /api/favorites`, `DELETE /api/favorites/[slug]` → session-required; uses `withUserRls`
-- `GET|POST /api/rentals` → list / create pending rental + Stripe Checkout Session (`checkoutUrl`)
+- `GET|POST /api/rentals` → list / create pending rental + Stripe Checkout Session (`checkoutUrl`). When `MARKETPLACE_ALLOW_UNPAID_ACCESS=true`, create returns an **active** 1-hour preview (`billing=preview`, `chatUrl`; checkout alias `url` points at chat).
 - `POST /api/checkout` → same create path as `POST /api/rentals`; also returns `url` for the hosted Checkout redirect
 - `POST /api/rentals/[id]/checkout` → resume an open Checkout Session for a pending rental
 - `POST /api/rentals/[id]/renew` → Checkout Session to extend an already-paid rental
@@ -311,7 +311,9 @@ Chat and session APIs call `rentalAccessError()` / `rentalIsActive()` (`status=a
 
 ## Stripe
 
-Official `stripe` SDK in `lib/stripe/`. Canonical secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`. Success/cancel URLs use `NEXT_PUBLIC_APP_URL` (fallback `VERCEL_URL`). Deploy owns live keys; empty keys make checkout/webhook routes return 503. There is no unpaid-access bypass.
+Official `stripe` SDK in `lib/stripe/`. Canonical secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`. Success/cancel URLs use `NEXT_PUBLIC_APP_URL` (fallback `VERCEL_URL`). Deploy owns live keys; empty keys make checkout/webhook routes return 503 **unless** `MARKETPLACE_ALLOW_UNPAID_ACCESS=true`.
+
+That flag is staging-only (`lib/runtime/unpaid-access.ts`). When it is exactly `true`, `POST /api/rentals` and `POST /api/checkout` skip Checkout, insert `rentals.status=active` with a 1-hour window, and return `chatUrl` so the signed-in user can chat. Resume/renew/webhook stay Stripe-gated. Unset or any other value keeps the production Stripe gate. Do not invent Stripe keys and do not render a fake payment form.
 
 Webhook endpoint: `POST /api/webhooks/stripe`. Configure that URL in the Stripe Dashboard (events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `payment_intent.succeeded`, plus `checkout.session.expired` / `checkout.session.async_payment_failed` to mark open payments canceled). The handler:
 
@@ -322,7 +324,7 @@ Webhook endpoint: `POST /api/webhooks/stripe`. Configure that URL in the Stripe 
 5. Purchase: `pending` → `active`, set `starts_at`/`ends_at` from purchased `durationHours`, store Stripe ids
 6. Renewal: `ends_at = max(ends_at, now) + durationHours`, `usage_included += purchased usage`
 
-`POST /api/rentals` `{ slug, durationId }` inserts `rentals.status=pending` and returns `checkoutUrl`. `POST /api/checkout` is the same create path and also returns `url` for the hosted Checkout redirect. Hosted Checkout is `mode=payment` because catalog `rental_options.durations` are one-time hour windows (4h / 24h / 7d), not recurring subscriptions. `POST /api/rentals/[id]/renew` starts another Checkout Session for an already-paid rental. `POST /api/rentals/[id]/end` is not a Stripe refund: it stops access for the renter.
+`POST /api/rentals` `{ slug, durationId }` inserts `rentals.status=pending` and returns `checkoutUrl`, or — when `MARKETPLACE_ALLOW_UNPAID_ACCESS=true` — an active preview rental and `chatUrl`. `POST /api/checkout` is the same create path and also returns `url` (Checkout URL, or the chat href in preview). Hosted Checkout is `mode=payment` because catalog `rental_options.durations` are one-time hour windows (4h / 24h / 7d), not recurring subscriptions. `POST /api/rentals/[id]/renew` starts another Checkout Session for an already-paid rental. `POST /api/rentals/[id]/end` is not a Stripe refund: it stops access for the renter.
 
 Webhook writes use `getDb()` (privileged). `rental_payments` and `stripe_events` have FORCE RLS and no authenticated policies.
 
@@ -343,6 +345,7 @@ Do this once on the production Neon branch and the linked Vercel project before 
 | Variable | Notes |
 | --- | --- |
 | `NEXT_PUBLIC_APP_URL` | Public origin used for Stripe success/cancel URLs and OAuth callbacks |
+| `MARKETPLACE_ALLOW_UNPAID_ACCESS` | Staging only. Set `true` to allow authenticated 1-hour preview rentals without Stripe. **Must be unset in production paid traffic.** |
 
 **Neon (Lakebase Postgres)**
 
@@ -369,7 +372,7 @@ Do this once on the production Neon branch and the linked Vercel project before 
 | `STRIPE_WEBHOOK_SECRET` | Signing secret for the production webhook endpoint |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Matching `pk_live_…` / `pk_test_…` |
 
-Empty Stripe keys make checkout and webhook routes return HTTP 503. There is no unpaid bypass.
+Empty Stripe keys make checkout and webhook routes return HTTP 503. The only unpaid path is `MARKETPLACE_ALLOW_UNPAID_ACCESS=true` (staging preview). Leave it unset in production.
 
 **UNOROUTER**
 

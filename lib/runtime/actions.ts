@@ -24,9 +24,18 @@ async function requireCheckoutUser(): Promise<
   return { ok: true, userId };
 }
 
-function redirectToCheckout(url: unknown): CheckoutActionState {
-  if (typeof url === "string" && url.startsWith("https://")) {
-    redirect(url);
+function redirectAfterRentalCreate(data: {
+  billing?: string;
+  chatUrl?: string;
+  checkoutUrl?: string;
+}): CheckoutActionState {
+  if (data.billing === "preview" && typeof data.chatUrl === "string") {
+    if (data.chatUrl.startsWith("/chat?")) {
+      redirect(data.chatUrl);
+    }
+  }
+  if (typeof data.checkoutUrl === "string" && data.checkoutUrl.startsWith("https://")) {
+    redirect(data.checkoutUrl);
   }
   return { error: "Stripe Checkout URL was missing." };
 }
@@ -49,7 +58,7 @@ export async function startRentalCheckout(
   if (!result.ok) {
     return { error: result.error };
   }
-  return redirectToCheckout(result.data.checkoutUrl);
+  return redirectAfterRentalCreate(result.data);
 }
 
 export async function resumePendingCheckout(
@@ -68,7 +77,7 @@ export async function resumePendingCheckout(
   if (!result.ok) {
     return { error: result.error };
   }
-  return redirectToCheckout(result.data.checkoutUrl);
+  return redirectAfterRentalCreate(result.data);
 }
 
 export async function startRentalRenewal(
@@ -89,5 +98,5 @@ export async function startRentalRenewal(
   if (!result.ok) {
     return { error: result.error };
   }
-  return redirectToCheckout(result.data.checkoutUrl);
+  return redirectAfterRentalCreate(result.data);
 }

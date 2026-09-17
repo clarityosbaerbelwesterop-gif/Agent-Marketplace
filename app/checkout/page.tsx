@@ -11,6 +11,7 @@ import { getVerifiedSession } from "@/lib/auth/server";
 import { getAgentBySlug, isDatabaseConfigured } from "@/lib/catalog/queries";
 import { CONNECTOR_LIST } from "@/lib/connectors";
 import { getRentalForUser, rentalIsActive } from "@/lib/runtime/rentals";
+import { isUnpaidAccessAllowed } from "@/lib/runtime/unpaid-access";
 import { chatRentalHref } from "@/lib/urls";
 import { firstSearchParam } from "@/lib/utils";
 
@@ -41,6 +42,7 @@ export default async function CheckoutPage({
   const canceled =
     params.canceled === "1" || params.canceled === "true";
   const session = await getVerifiedSession();
+  const unpaidPreview = isUnpaidAccessAllowed();
 
   if (!isDatabaseConfigured()) {
     return (
@@ -118,7 +120,11 @@ export default async function CheckoutPage({
       width="wide"
       eyebrow="Checkout"
       title="Miete prüfen"
-      description="Preis liegt offen. Weiter zu Stripe Checkout; die Miete wird erst per Webhook aktiv."
+      description={
+        unpaidPreview
+          ? "Staging-Vorschau ohne Stripe: nach der Anmeldung direkt in den Chat (1 Stunde)."
+          : "Preis liegt offen. Weiter zu Stripe Checkout; die Miete wird erst per Webhook aktiv."
+      }
     >
       {!agent ? (
         <div className="flex flex-col gap-4">
@@ -132,13 +138,18 @@ export default async function CheckoutPage({
         </div>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
-          <CheckoutSummary agent={agent} durationId={durationId} />
-          <div className="flex flex-col gap-4">
-            <CheckoutPayPanel
+            <CheckoutSummary
               agent={agent}
               durationId={durationId}
-              signedIn={Boolean(session?.user)}
+              unpaidPreview={unpaidPreview}
             />
+            <div className="flex flex-col gap-4">
+              <CheckoutPayPanel
+                agent={agent}
+                durationId={durationId}
+                signedIn={Boolean(session?.user)}
+                unpaidPreview={unpaidPreview}
+              />
             <FirstWaveConnectorsNote />
           </div>
         </div>

@@ -27,6 +27,7 @@ export {
   serializeRental,
   RENTAL_CONFLICT,
 } from "./rentals";
+export { isUnpaidAccessAllowed } from "./unpaid-access";
 export {
   getOrCreateOpenSession,
   listSessionRuns,

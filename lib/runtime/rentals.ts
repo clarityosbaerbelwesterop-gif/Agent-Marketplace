@@ -18,7 +18,15 @@ import {
   isStripeConfigured,
 } from "@/lib/stripe";
 import { getVerifiedSession } from "@/lib/auth/server";
+import { ensurePendingConnectorGrantsForRental } from "@/lib/connectors";
+import { chatRentalHref } from "@/lib/urls";
 import { rentalEndTransition, rentalIsActive } from "./rental-status";
+import {
+  UNPAID_PREVIEW_NOTICE,
+  UNPAID_PREVIEW_USAGE_INCLUDED,
+  isUnpaidAccessAllowed,
+  unpaidPreviewWindow,
+} from "./unpaid-access";
 
 export {
   cannotEndRentalMessage,
@@ -84,6 +92,8 @@ export function serializeRental(
     agentName?: string;
     agentTier?: string;
     checkoutUrl?: string;
+    chatUrl?: string;
+    billing?: "stripe" | "preview";
     stripeSessionId?: string | null;
     notice?: string;
   } = {},
@@ -105,11 +115,12 @@ export function serializeRental(
     endedByUserId: rental.endedByUserId ?? null,
     endReason: rental.endReason ?? null,
     active: rentalIsActive(rental),
-    billing: "stripe" as const,
+    billing: extra.billing ?? "stripe",
     agentSlug: extra.agentSlug,
     agentName: extra.agentName,
     agentTier: extra.agentTier,
     checkoutUrl: extra.checkoutUrl,
+    chatUrl: extra.chatUrl,
     notice: extra.notice,
   };
 }
@@ -209,7 +220,8 @@ export async function createRentalCheckout(input: {
   slug: string;
   durationId?: string;
 }) {
-  if (!isStripeConfigured()) {
+  const unpaidPreview = isUnpaidAccessAllowed();
+  if (!unpaidPreview && !isStripeConfigured()) {
     return { ok: false as const, error: STRIPE_NOT_CONFIGURED, status: 503 };
   }
 
@@ -239,7 +251,7 @@ export async function createRentalCheckout(input: {
       agent.rentalOptions?.durations ?? [],
       input.durationId,
     );
-    if (!duration) {
+    if (!unpaidPreview && !duration) {
       return {
         ok: false as const,
         error: input.durationId
@@ -248,7 +260,7 @@ export async function createRentalCheckout(input: {
         status: 400,
       };
     }
-    if (duration.priceCents <= 0) {
+    if (!unpaidPreview && duration && duration.priceCents <= 0) {
       return {
         ok: false as const,
         error: "This duration has no payable price.",
@@ -269,18 +281,19 @@ export async function createRentalCheckout(input: {
         .returning();
     }
 
+    const previewWindow = unpaidPreview ? unpaidPreviewWindow() : null;
     const [rental] = await db
       .insert(rentals)
       .values({
         userId: input.userId,
         workspaceId: workspace.id,
         agentProfileId: agent.id,
-        status: "pending",
-        startsAt: null,
-        endsAt: null,
+        status: previewWindow ? "active" : "pending",
+        startsAt: previewWindow?.startsAt ?? null,
+        endsAt: previewWindow?.endsAt ?? null,
         stripeSessionId: null,
         stripePaymentIntentId: null,
-        usageIncluded: 0,
+        usageIncluded: previewWindow ? UNPAID_PREVIEW_USAGE_INCLUDED : 0,
         usageConsumed: 0,
       })
       .returning();
@@ -291,11 +304,39 @@ export async function createRentalCheckout(input: {
       agentName: agent.name,
       agentSlug: agent.slug,
       duration,
+      unpaidPreview,
     };
   });
 
   if (!prepared.ok) {
     return prepared;
+  }
+
+  if (prepared.unpaidPreview) {
+    try {
+      await ensurePendingConnectorGrantsForRental(prepared.rental.id);
+    } catch {
+      // Preview access does not depend on grant stubs.
+    }
+    const chatUrl = chatRentalHref(prepared.rental.id);
+    return {
+      ok: true as const,
+      data: serializeRental(prepared.rental, {
+        agentSlug: prepared.agentSlug,
+        agentName: prepared.agentName,
+        billing: "preview",
+        chatUrl,
+        notice: UNPAID_PREVIEW_NOTICE,
+      }),
+    };
+  }
+
+  if (!prepared.duration) {
+    return {
+      ok: false as const,
+      error: "This agent has no rental durations.",
+      status: 400,
+    };
   }
 
   try {
