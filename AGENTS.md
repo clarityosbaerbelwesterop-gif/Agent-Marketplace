@@ -175,7 +175,7 @@ Apply `drizzle/*.sql` to Neon in order. Then run `pnpm db:seed:agents` against `
 
 ## First-party connectors
 
-Canonical ids: `neon`, `github`, `slack`, `vercel`, `supabase`, `render`, `stripe`, `cursor`. Registry: `lib/connectors/registry.ts` (display name, description, scopes, env/secret names, capability tags). These are **tenant grants during a rental**, not Cursor/Grok Bot marketplace plugins.
+Canonical ids: `neon`, `github`, `slack`, `vercel`, `supabase`, `render`, `stripe`, `cursor`. Registry: `lib/connectors/registry.ts` (display name, description, scopes, env/secret names, capability tags). These are **tenant grants during a rental**, not Cursor/Grok Bot marketplace plugins. Catalog seed still emits `postgres` on some rows; runtime maps that to `neon` without a re-seed.
 
 | Connector | Auth | Platform env | Tenant secrets |
 | --- | --- | --- | --- |

@@ -52,7 +52,8 @@ export async function resolveConnectorScope(input: {
       if (!rentalIsActive(rental)) {
         return {
           ok: false as const,
-          error: "Rental is not active",
+          error:
+            "Rental is not active. Connectors require a Stripe-activated rental (signed webhook), not a pending Checkout session.",
           status: 409,
         };
       }

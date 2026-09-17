@@ -55,10 +55,11 @@ export default async function ConnectorsPage({
         endsAt: row.endsAt ? new Date(row.endsAt) : null,
       }),
     );
+    const pending = rentals.filter((row) => row.status === "pending");
     return (
       <PageShell
         title="Connectors"
-        description="Pick an active rental. Grants are stored per user and workspace, not as Grok Bot plugins."
+        description="Pick a webhook-activated rental. Grants are stored per user and workspace, not as Grok Bot plugins."
       >
         {active.length === 0 ? (
           <p className="text-sm text-muted">
@@ -66,7 +67,8 @@ export default async function ConnectorsPage({
             <Link className="underline underline-offset-4" href="/marketplace">
               Browse the catalog
             </Link>{" "}
-            and pay with Stripe Checkout from an agent page.
+            and pay with Stripe Checkout from an agent page. Pending checkouts
+            do not unlock connectors.
           </p>
         ) : (
           <ul className="flex flex-col gap-2 text-sm">
@@ -83,16 +85,64 @@ export default async function ConnectorsPage({
             ))}
           </ul>
         )}
+        {pending.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            <p className="text-sm text-muted">
+              Waiting on Stripe Checkout (resume payment; webhook activates the
+              rental):
+            </p>
+            <ul className="flex flex-col gap-2 text-sm">
+              {pending.map((row) => (
+                <li key={row.id}>
+                  <Link
+                    className="underline underline-offset-4"
+                    href={`/checkout?rentalId=${row.id}`}
+                  >
+                    {row.agentName}
+                  </Link>
+                  <span className="text-muted"> · pending</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </PageShell>
     );
   }
 
   const bundle = await getRentalForUser(session.user.id, rentalId);
-  if (!bundle || !rentalIsActive(bundle.rental)) {
+  if (!bundle) {
     return (
       <PageShell
         title="Connectors"
-        description="That rental is missing or no longer active."
+        description="That rental is missing."
+      >
+        <Link className="text-sm underline underline-offset-4" href="/connectors">
+          Choose another rental
+        </Link>
+      </PageShell>
+    );
+  }
+  if (bundle.rental.status === "pending") {
+    return (
+      <PageShell
+        title="Connectors"
+        description="This rental is still pending Stripe Checkout. Connectors unlock after the signed webhook sets the rental active."
+      >
+        <Link
+          className="text-sm underline underline-offset-4"
+          href={`/checkout?rentalId=${rentalId}`}
+        >
+          Resume Checkout
+        </Link>
+      </PageShell>
+    );
+  }
+  if (!rentalIsActive(bundle.rental)) {
+    return (
+      <PageShell
+        title="Connectors"
+        description="That rental is no longer active."
       >
         <Link className="text-sm underline underline-offset-4" href="/connectors">
           Choose another rental

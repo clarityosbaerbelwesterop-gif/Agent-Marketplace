@@ -4,6 +4,7 @@ import { withUserRls } from "@/lib/db";
 import { connectorGrants } from "@/lib/db/schema";
 import type { ConnectorCredentials, JsonObject } from "@/lib/db/json";
 import { getConnector, oauthEnvConfigured } from "./registry";
+import { canonicalConnectorId } from "./aliases";
 import {
   buildAuthorizeUrl,
   encodeOauthState,
@@ -14,6 +15,11 @@ import type {
   ConnectorId,
   PublicConnectorGrant,
 } from "./types";
+
+function connectorDefinitionFromInput(provider: string) {
+  const raw = provider.trim().toLowerCase();
+  return getConnector(canonicalConnectorId(raw) ?? raw);
+}
 
 export type GrantRow = typeof connectorGrants.$inferSelect;
 
@@ -210,7 +216,7 @@ export async function requestConnectorGrant(input: {
     }
   | { ok: false; error: string; status: number }
 > {
-  const definition = getConnector(input.provider.trim().toLowerCase());
+  const definition = connectorDefinitionFromInput(input.provider);
   if (!definition) {
     return { ok: false, error: "Unknown connector", status: 400 };
   }
@@ -388,7 +394,7 @@ export async function revokeConnectorGrant(input: {
   | { ok: true; data: PublicConnectorGrant }
   | { ok: false; error: string; status: number }
 > {
-  const definition = getConnector(input.provider.trim().toLowerCase());
+  const definition = connectorDefinitionFromInput(input.provider);
   if (!definition) {
     return { ok: false, error: "Unknown connector", status: 400 };
   }
