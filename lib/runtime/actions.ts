@@ -8,6 +8,8 @@ import {
   renewRentalCheckout,
   resumeRentalCheckout,
 } from "@/lib/runtime/rentals";
+import { UNPAID_TEST_BILLING } from "@/lib/runtime/unpaid-access";
+import { chatRentalHref } from "@/lib/urls";
 
 export type CheckoutActionState = { error: string } | null;
 
@@ -48,6 +50,9 @@ export async function startRentalCheckout(
   });
   if (!result.ok) {
     return { error: result.error };
+  }
+  if (result.data.billing === UNPAID_TEST_BILLING) {
+    redirect(chatRentalHref(result.data.id));
   }
   return redirectToCheckout(result.data.checkoutUrl);
 }

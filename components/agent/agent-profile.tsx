@@ -17,11 +17,13 @@ export function AgentProfile({
   durationId,
   compare,
   signedIn,
+  unpaidAccess = false,
 }: {
   agent: AgentDetail;
   durationId?: string;
   compare: string[];
   signedIn: boolean;
+  unpaidAccess?: boolean;
 }) {
   const durations = listDurations(agent);
   const duration = pickDuration(agent, durationId);
@@ -146,8 +148,9 @@ export function AgentProfile({
           <CardHeader>
             <CardTitle>Miete</CardTitle>
             <p className="text-sm text-muted">
-              Preis und inkludiertes Kontingent aus `rental_options`. Zahlung über
-              Stripe Checkout; Aktivierung nur per Webhook.
+              {unpaidAccess
+                ? "Preis und inkludiertes Kontingent aus `rental_options`. Testmodus: sofort aktive Miete ohne Stripe und ohne Kartenformular."
+                : "Preis und inkludiertes Kontingent aus `rental_options`. Zahlung über Stripe Checkout; Aktivierung nur per Webhook."}
             </p>
           </CardHeader>
           <DurationOptions
@@ -182,13 +185,14 @@ export function AgentProfile({
                 currency: item.currency,
               }))}
               durationId={duration?.id}
+              unpaidAccess={unpaidAccess}
             />
           ) : (
             <p className="text-sm text-muted">
               <ButtonLink href="/login" variant="ghost" size="sm">
                 Anmelden
               </ButtonLink>{" "}
-              für Stripe Checkout.
+              {unpaidAccess ? "für eine Testmiete." : "für Stripe Checkout."}
             </p>
           )}
           <div className="flex flex-col gap-2 text-sm">

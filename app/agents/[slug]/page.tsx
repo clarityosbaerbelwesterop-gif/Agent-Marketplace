@@ -5,6 +5,7 @@ import { PageShell } from "@/components/page-shell";
 import { getVerifiedSession } from "@/lib/auth/server";
 import { parseCompareSlugs } from "@/lib/catalog/compare-params";
 import { getAgentBySlug, isDatabaseConfigured } from "@/lib/catalog/queries";
+import { isUnpaidAccessAllowed } from "@/lib/runtime/unpaid-access";
 import { firstSearchParam } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -59,6 +60,7 @@ export default async function AgentPage({
         durationId={durationId}
         compare={compare}
         signedIn={Boolean(session?.user)}
+        unpaidAccess={isUnpaidAccessAllowed()}
       />
     </main>
   );

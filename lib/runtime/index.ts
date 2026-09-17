@@ -16,6 +16,12 @@ export {
   RENTAL_CONFLICT,
 } from "./rentals";
 export {
+  isUnpaidAccessAllowed,
+  inferRentalBilling,
+  resolveRentalCreateMode,
+  UNPAID_TEST_BILLING,
+} from "./unpaid-access";
+export {
   getOrCreateOpenSession,
   listSessionRuns,
   getRunForUser,

@@ -10,15 +10,24 @@ import {
 } from "@/lib/db/schema";
 import { pruneGroupMembershipForRental } from "./rooms";
 import type { AgentRentalDuration } from "@/lib/db/json";
+import { ensurePendingConnectorGrantsForRental } from "@/lib/connectors";
 import {
   STRIPE_NOT_CONFIGURED,
   createCheckoutSession,
   expireOpenCheckoutSession,
   getOpenCheckoutUrl,
   isStripeConfigured,
+  purchaseWindow,
 } from "@/lib/stripe";
 import { getVerifiedSession } from "@/lib/auth/server";
 import { rentalEndTransition, rentalIsActive } from "./rental-status";
+import {
+  UNPAID_TEST_BILLING,
+  UNPAID_TEST_NOTICE,
+  inferRentalBilling,
+  resolveRentalCreateMode,
+  type RentalBilling,
+} from "./unpaid-access";
 
 export {
   cannotEndRentalMessage,
@@ -83,11 +92,13 @@ export function serializeRental(
     agentSlug?: string;
     agentName?: string;
     agentTier?: string;
-    checkoutUrl?: string;
+    checkoutUrl?: string | null;
     stripeSessionId?: string | null;
+    billing?: RentalBilling;
     notice?: string;
   } = {},
 ) {
+  const stripeSessionId = extra.stripeSessionId ?? rental.stripeSessionId;
   return {
     id: rental.id,
     userId: rental.userId,
@@ -96,7 +107,7 @@ export function serializeRental(
     status: rental.status,
     startsAt: rental.startsAt?.toISOString() ?? null,
     endsAt: rental.endsAt?.toISOString() ?? null,
-    stripeSessionId: extra.stripeSessionId ?? rental.stripeSessionId,
+    stripeSessionId,
     stripePaymentIntentId: rental.stripePaymentIntentId,
     usageIncluded: rental.usageIncluded,
     usageConsumed: rental.usageConsumed,
@@ -105,7 +116,13 @@ export function serializeRental(
     endedByUserId: rental.endedByUserId ?? null,
     endReason: rental.endReason ?? null,
     active: rentalIsActive(rental),
-    billing: "stripe" as const,
+    billing:
+      extra.billing ??
+      inferRentalBilling({
+        stripeSessionId,
+        stripePaymentIntentId: rental.stripePaymentIntentId,
+        startsAt: rental.startsAt,
+      }),
     agentSlug: extra.agentSlug,
     agentName: extra.agentName,
     agentTier: extra.agentTier,
@@ -209,14 +226,17 @@ export async function createRentalCheckout(input: {
   slug: string;
   durationId?: string;
 }) {
-  if (!isStripeConfigured()) {
-    return { ok: false as const, error: STRIPE_NOT_CONFIGURED, status: 503 };
+  const mode = resolveRentalCreateMode();
+  if (!mode.ok) {
+    return { ok: false as const, error: mode.error, status: mode.status };
   }
 
   const slug = input.slug.trim();
   if (!slug) {
     return { ok: false as const, error: "slug is required", status: 400 };
   }
+
+  const unpaidTest = mode.billing === UNPAID_TEST_BILLING;
 
   const prepared = await withUserRls(input.userId, async (db) => {
     const [agent] = await db
@@ -269,18 +289,22 @@ export async function createRentalCheckout(input: {
         .returning();
     }
 
+    const window = unpaidTest
+      ? purchaseWindow(new Date(), duration.durationHours)
+      : null;
+
     const [rental] = await db
       .insert(rentals)
       .values({
         userId: input.userId,
         workspaceId: workspace.id,
         agentProfileId: agent.id,
-        status: "pending",
-        startsAt: null,
-        endsAt: null,
+        status: unpaidTest ? "active" : "pending",
+        startsAt: window?.startsAt ?? null,
+        endsAt: window?.endsAt ?? null,
         stripeSessionId: null,
         stripePaymentIntentId: null,
-        usageIncluded: 0,
+        usageIncluded: window ? duration.usageIncluded : 0,
         usageConsumed: 0,
       })
       .returning();
@@ -296,6 +320,25 @@ export async function createRentalCheckout(input: {
 
   if (!prepared.ok) {
     return prepared;
+  }
+
+  if (unpaidTest) {
+    try {
+      await ensurePendingConnectorGrantsForRental(prepared.rental.id);
+    } catch {
+      // Same best-effort as the Stripe webhook path.
+    }
+    return {
+      ok: true as const,
+      data: serializeRental(prepared.rental, {
+        agentSlug: prepared.agentSlug,
+        agentName: prepared.agentName,
+        billing: UNPAID_TEST_BILLING,
+        checkoutUrl: null,
+        stripeSessionId: null,
+        notice: UNPAID_TEST_NOTICE,
+      }),
+    };
   }
 
   try {

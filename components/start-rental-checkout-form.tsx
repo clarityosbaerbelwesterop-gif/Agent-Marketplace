@@ -13,6 +13,7 @@ export function StartRentalCheckoutForm({
   slug,
   durations,
   durationId,
+  unpaidAccess = false,
 }: {
   slug: string;
   durations: Array<{
@@ -22,6 +23,7 @@ export function StartRentalCheckoutForm({
     currency?: string;
   }>;
   durationId?: string;
+  unpaidAccess?: boolean;
 }) {
   const [state, action, pending] = useActionState(
     startRentalCheckout,
@@ -58,9 +60,9 @@ export function StartRentalCheckoutForm({
         <input type="hidden" name="durationId" value={selectedId} />
       ) : null}
       <p className="text-sm text-muted">
-        Weiter zu Stripe Checkout zum Katalogpreis. Zugang bleibt ausstehend,
-        bis der Webhook die Zahlung bestätigt — der Erfolg-Redirect allein
-        aktiviert die Miete nicht.
+        {unpaidAccess
+          ? "Staging-Testmodus: die Miete wird sofort aktiv (billing unpaid_test). Kein Stripe Checkout, kein Kartenformular."
+          : "Weiter zu Stripe Checkout zum Katalogpreis. Zugang bleibt ausstehend, bis der Webhook die Zahlung bestätigt — der Erfolg-Redirect allein aktiviert die Miete nicht."}
       </p>
       {state?.error ? (
         <p className="text-sm text-danger" role="alert">
@@ -68,7 +70,13 @@ export function StartRentalCheckoutForm({
         </p>
       ) : null}
       <Button type="submit" disabled={pending}>
-        {pending ? "Weiterleitung zu Stripe…" : "Weiter zu Stripe Checkout"}
+        {unpaidAccess
+          ? pending
+            ? "Testmiete wird gestartet…"
+            : "Testmiete starten"
+          : pending
+            ? "Weiterleitung zu Stripe…"
+            : "Weiter zu Stripe Checkout"}
       </Button>
     </form>
   );
