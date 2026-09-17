@@ -1,17 +1,26 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { PageShell } from "@/components/page-shell";
 import { ChatClient } from "@/components/chat-client";
 import { EndRentalForm } from "@/components/end-rental-form";
 import { PaymentPendingNotice } from "@/components/payment-pending-notice";
 import { RenewRentalForm } from "@/components/renew-rental-form";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageShell } from "@/components/page-shell";
+import { ButtonLink } from "@/components/ui/button-link";
 import { getVerifiedSession } from "@/lib/auth/server";
 import { isDatabaseConfigured } from "@/lib/catalog/queries";
-import { listRentals, getRentalForUser, rentalIsActive } from "@/lib/runtime/rentals";
+import {
+  getRentalForUser,
+  listRentals,
+  rentalIsActive,
+} from "@/lib/runtime/rentals";
 import { getOrCreateOpenSession, listSessionRuns } from "@/lib/runtime/runs";
+import { rentalCheckoutHref } from "@/lib/urls";
+import { firstSearchParam } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Chat",
+  description:
+    "Chathub für eine bezahlte Miete. UNOROUTER streamt, sobald ein Key gesetzt ist.",
 };
 
 export const dynamic = "force-dynamic";
@@ -20,19 +29,21 @@ export default async function ChatPage({
   searchParams,
 }: PageProps<"/chat">) {
   const params = await searchParams;
-  const rentalId =
-    typeof params.rentalId === "string" ? params.rentalId : undefined;
+  const rentalId = firstSearchParam(params.rentalId);
   const session = await getVerifiedSession();
 
   if (!session?.user) {
     return (
       <PageShell
         title="Chat"
-        description="Sign in to send a message in an active rental session."
+        description="Melden Sie sich an, um in einer aktiven Miete zu schreiben."
       >
-        <Link className="text-sm underline underline-offset-4" href="/login">
-          Sign in
-        </Link>
+        <EmptyState
+          title="Anmeldung nötig"
+          description="Der Chathub hängt an einer verifizierten Neon-Auth-Sitzung."
+          actionHref="/login"
+          actionLabel="Anmelden"
+        />
       </PageShell>
     );
   }
@@ -41,7 +52,7 @@ export default async function ChatPage({
     return (
       <PageShell
         title="Chat"
-        description="Catalog database is not configured on this server."
+        description="Ohne DATABASE_URL gibt es keine Miet-Sitzungen."
       />
     );
   }
@@ -58,27 +69,23 @@ export default async function ChatPage({
     return (
       <PageShell
         title="Chat"
-        description="Pick an active paid rental. Chat rejects pending, canceled, and expired windows."
+        description="Wählen Sie eine aktive, per Webhook bestätigte Miete. Ausstehend, storniert und abgelaufen werden abgelehnt."
       >
         {active.length === 0 ? (
-          <p className="text-sm text-muted">
-            No active rentals.{" "}
-            <Link className="underline underline-offset-4" href="/marketplace">
-              Browse the catalog
-            </Link>{" "}
-            and pay with Stripe Checkout from an agent page.
-          </p>
+          <EmptyState
+            title="Keine aktive Miete"
+            description="Bezahlen Sie auf einem Agentenprofil mit Stripe Checkout. Der Erfolg-Redirect allein aktiviert die Miete nicht."
+            actionHref="/marketplace"
+            actionLabel="Marktplatz öffnen"
+          />
         ) : (
           <ul className="flex flex-col gap-2 text-sm">
             {active.map((row) => (
               <li key={row.id}>
-                <Link
-                  className="underline underline-offset-4"
-                  href={`/chat?rentalId=${row.id}`}
-                >
+                <ButtonLink href={`/chat?rentalId=${row.id}`} variant="secondary">
                   {row.agentName}
-                </Link>
-                <span className="text-muted"> · {row.agentTier}</span>
+                </ButtonLink>
+                <span className="ml-2 text-muted">· {row.agentTier}</span>
               </li>
             ))}
           </ul>
@@ -90,13 +97,10 @@ export default async function ChatPage({
   const bundle = await getRentalForUser(session.user.id, rentalId);
   if (!bundle) {
     return (
-      <PageShell
-        title="Chat"
-        description="That rental is missing."
-      >
-        <Link className="text-sm underline underline-offset-4" href="/chat">
-          Choose another rental
-        </Link>
+      <PageShell title="Chat" description="Diese Miete fehlt für dieses Konto.">
+        <ButtonLink href="/chat" variant="secondary">
+          Andere Miete wählen
+        </ButtonLink>
       </PageShell>
     );
   }
@@ -105,15 +109,12 @@ export default async function ChatPage({
     return (
       <PageShell
         title={bundle.agent.name}
-        description="Payment is not confirmed yet. The Checkout success URL does not activate this rental."
+        description="Zahlung noch nicht bestätigt. Die Stripe-Erfolgs-URL aktiviert die Miete nicht."
       >
         <PaymentPendingNotice rentalId={rentalId} />
-        <Link
-          className="text-sm underline underline-offset-4"
-          href={`/checkout?rentalId=${rentalId}`}
-        >
-          Resume checkout
-        </Link>
+        <ButtonLink href={rentalCheckoutHref(rentalId)} variant="secondary">
+          Checkout fortsetzen
+        </ButtonLink>
       </PageShell>
     );
   }
@@ -126,15 +127,15 @@ export default async function ChatPage({
         title="Chat"
         description={
           ended
-            ? "This rental has ended. Chat rejects ended rentals."
-            : "That rental is not active or has expired."
+            ? "Diese Miete wurde beendet. Chat lehnt beendete Mietfenster ab."
+            : "Diese Miete ist nicht aktiv oder abgelaufen."
         }
       >
         {ended ? (
           <p className="text-sm text-muted">
-            Ended
+            Beendet
             {bundle.rental.endedAt
-              ? ` at ${bundle.rental.endedAt.toISOString()}`
+              ? ` um ${bundle.rental.endedAt.toISOString()}`
               : ""}
             {bundle.rental.endReason ? ` (${bundle.rental.endReason})` : ""}.
           </p>
@@ -147,9 +148,9 @@ export default async function ChatPage({
             }))}
           />
         )}
-        <Link className="text-sm underline underline-offset-4" href="/chat">
-          Choose another rental
-        </Link>
+        <ButtonLink href="/chat" variant="ghost">
+          Andere Miete wählen
+        </ButtonLink>
       </PageShell>
     );
   }
@@ -161,9 +162,9 @@ export default async function ChatPage({
   if (!opened.ok) {
     return (
       <PageShell title="Chat" description={opened.error}>
-        <Link className="text-sm underline underline-offset-4" href="/chat">
-          Back
-        </Link>
+        <ButtonLink href="/chat" variant="ghost">
+          Zurück
+        </ButtonLink>
       </PageShell>
     );
   }
@@ -172,10 +173,16 @@ export default async function ChatPage({
   const durations = bundle.agent.rentalOptions.durations ?? [];
 
   return (
-    <PageShell
-      title={bundle.agent.name}
-      description="Authenticated streaming chat. Each turn is stored as an agent_run with model_id_used and skill_version."
-    >
+    <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-10 sm:px-6">
+      <header className="flex flex-col gap-2">
+        <p className="text-xs uppercase tracking-[0.16em] text-muted">Chathub</p>
+        <h1 className="font-display text-4xl tracking-tight">
+          {bundle.agent.name}
+        </h1>
+        <p className="text-sm text-muted">
+          Authentifizierter Stream. Jeder Turn landet als agent_run.
+        </p>
+      </header>
       <ChatClient
         rentalId={rentalId}
         sessionId={opened.data.session.id}
@@ -197,6 +204,6 @@ export default async function ChatPage({
         }))}
       />
       <EndRentalForm rentalId={rentalId} />
-    </PageShell>
+    </main>
   );
 }

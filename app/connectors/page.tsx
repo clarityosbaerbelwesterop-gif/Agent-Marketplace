@@ -1,14 +1,23 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { PageShell } from "@/components/page-shell";
 import { ConnectorPanel } from "@/components/connector-panel";
-import { connectorCatalog, listConnectorGrants } from "@/lib/connectors";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ButtonLink } from "@/components/ui/button-link";
+import { PageShell } from "@/components/page-shell";
 import { getVerifiedSession } from "@/lib/auth/server";
 import { isDatabaseConfigured } from "@/lib/catalog/queries";
-import { listRentals, getRentalForUser, rentalIsActive } from "@/lib/runtime/rentals";
+import { connectorCatalog, listConnectorGrants } from "@/lib/connectors";
+import {
+  getRentalForUser,
+  listRentals,
+  rentalIsActive,
+} from "@/lib/runtime/rentals";
+import { chatRentalHref, rentalCheckoutHref } from "@/lib/urls";
+import { firstSearchParam } from "@/lib/utils";
 
 export const metadata: Metadata = {
-  title: "Connectors",
+  title: "Konnektoren",
+  description:
+    "Tenant-Grants für eine aktive Miete. OAuth und API-Keys sind keine Marketplace-Zahlung.",
 };
 
 export const dynamic = "force-dynamic";
@@ -17,27 +26,28 @@ export default async function ConnectorsPage({
   searchParams,
 }: PageProps<"/connectors">) {
   const params = await searchParams;
-  const rentalId =
-    typeof params.rentalId === "string" ? params.rentalId : undefined;
-  const connected =
-    typeof params.connected === "string" ? params.connected : undefined;
-  const error = typeof params.error === "string" ? params.error : undefined;
+  const rentalId = firstSearchParam(params.rentalId);
+  const connected = firstSearchParam(params.connected);
+  const error = firstSearchParam(params.error);
   const session = await getVerifiedSession();
 
   if (!session?.user) {
     return (
       <PageShell
-        title="Connectors"
-        description="Sign in to grant Neon, GitHub, Slack, Vercel, Supabase, Render, Stripe, or Cursor access during a rental."
+        title="Konnektoren"
+        description="Melden Sie sich an, um Neon, GitHub, Slack, Vercel, Supabase, Render, Stripe oder Cursor während einer Miete freizugeben."
       >
-        <Link className="text-sm underline underline-offset-4" href="/login">
-          Sign in
-        </Link>
+        <EmptyState
+          title="Anmeldung nötig"
+          description="Grants hängen an einer verifizierten Neon-Auth-Sitzung."
+          actionHref="/login"
+          actionLabel="Anmelden"
+        />
         <p className="text-sm text-muted">
-          Catalog-only MCP discovery (not grants):{" "}
-          <Link className="underline underline-offset-4" href="/connectors/discover">
-            /connectors/discover
-          </Link>
+          Catalog-only MCP-Suche (keine Grants):{" "}
+          <ButtonLink href="/connectors/discover" variant="ghost" size="sm">
+            Entdecken
+          </ButtonLink>
         </p>
       </PageShell>
     );
@@ -46,8 +56,8 @@ export default async function ConnectorsPage({
   if (!isDatabaseConfigured()) {
     return (
       <PageShell
-        title="Connectors"
-        description="Catalog database is not configured on this server."
+        title="Konnektoren"
+        description="Ohne DATABASE_URL gibt es keine Grant-Zeilen."
       />
     );
   }
@@ -64,29 +74,27 @@ export default async function ConnectorsPage({
     const pending = rentals.filter((row) => row.status === "pending");
     return (
       <PageShell
-        title="Connectors"
-        description="Pick a webhook-activated rental. Grants are stored per user and workspace, not as Grok Bot plugins. Public MCP catalog search is at /connectors/discover and is not grantable."
+        title="Konnektoren"
+        description="Wählen Sie eine per Webhook aktivierte Miete. Grants liegen pro User und Workspace. Öffentliche MCP-Suche unter /connectors/discover ist nicht grantable."
       >
         {active.length === 0 ? (
-          <p className="text-sm text-muted">
-            No active rentals.{" "}
-            <Link className="underline underline-offset-4" href="/marketplace">
-              Browse the catalog
-            </Link>{" "}
-            and pay with Stripe Checkout from an agent page. Pending checkouts
-            do not unlock connectors.
-          </p>
+          <EmptyState
+            title="Keine aktive Miete"
+            description="Bezahlen Sie auf einem Agentenprofil mit Stripe Checkout. Ausstehende Checkouts schalten keine Konnektoren frei."
+            actionHref="/marketplace"
+            actionLabel="Marktplatz öffnen"
+          />
         ) : (
           <ul className="flex flex-col gap-2 text-sm">
             {active.map((row) => (
               <li key={row.id}>
-                <Link
-                  className="underline underline-offset-4"
+                <ButtonLink
                   href={`/connectors?rentalId=${row.id}`}
+                  variant="secondary"
                 >
                   {row.agentName}
-                </Link>
-                <span className="text-muted"> · {row.agentTier}</span>
+                </ButtonLink>
+                <span className="ml-2 text-muted">· {row.agentTier}</span>
               </li>
             ))}
           </ul>
@@ -94,18 +102,19 @@ export default async function ConnectorsPage({
         {pending.length > 0 ? (
           <div className="flex flex-col gap-2">
             <p className="text-sm text-muted">
-              Waiting on Stripe Checkout (resume payment; webhook activates the
-              rental):
+              Warten auf Stripe Checkout (Zahlung fortsetzen; Webhook aktiviert
+              die Miete):
             </p>
             <ul className="flex flex-col gap-2 text-sm">
               {pending.map((row) => (
                 <li key={row.id}>
-                  <Link
-                    className="underline underline-offset-4"
-                    href={`/checkout?rentalId=${row.id}`}
+                  <ButtonLink
+                    href={rentalCheckoutHref(row.id)}
+                    variant="ghost"
+                    size="sm"
                   >
                     {row.agentName}
-                  </Link>
+                  </ButtonLink>
                   <span className="text-muted"> · pending</span>
                 </li>
               ))}
@@ -119,66 +128,56 @@ export default async function ConnectorsPage({
   const bundle = await getRentalForUser(session.user.id, rentalId);
   if (!bundle) {
     return (
-      <PageShell
-        title="Connectors"
-        description="That rental is missing."
-      >
-        <Link className="text-sm underline underline-offset-4" href="/connectors">
-          Choose another rental
-        </Link>
+      <PageShell title="Konnektoren" description="Diese Miete fehlt.">
+        <ButtonLink href="/connectors" variant="secondary">
+          Andere Miete wählen
+        </ButtonLink>
       </PageShell>
     );
   }
   if (bundle.rental.status === "pending") {
     return (
       <PageShell
-        title="Connectors"
-        description="This rental is still pending Stripe Checkout. Connectors unlock after the signed webhook sets the rental active."
+        title="Konnektoren"
+        description="Diese Miete wartet noch auf Stripe Checkout. Konnektoren öffnen erst, wenn der Webhook sie aktiv setzt."
       >
-        <Link
-          className="text-sm underline underline-offset-4"
-          href={`/checkout?rentalId=${rentalId}`}
-        >
-          Resume Checkout
-        </Link>
+        <ButtonLink href={rentalCheckoutHref(rentalId)} variant="secondary">
+          Checkout fortsetzen
+        </ButtonLink>
       </PageShell>
     );
   }
   if (!rentalIsActive(bundle.rental)) {
     return (
       <PageShell
-        title="Connectors"
-        description="That rental is no longer active."
+        title="Konnektoren"
+        description="Diese Miete ist nicht mehr aktiv."
       >
-        <Link className="text-sm underline underline-offset-4" href="/connectors">
-          Choose another rental
-        </Link>
+        <ButtonLink href="/connectors" variant="ghost">
+          Andere Miete wählen
+        </ButtonLink>
       </PageShell>
     );
   }
 
   return (
     <PageShell
-      title="Connectors"
-      description={`Tenant grants for ${bundle.agent.name}. OAuth callbacks stay pending until the provider returns a token. API-key connectors stay pending until secrets are stored.`}
+      title="Konnektoren"
+      description={`Tenant-Grants für ${bundle.agent.name}. OAuth bleibt ausstehend, bis der Anbieter ein Token liefert. API-Key-Konnektoren bleiben pending, bis Secrets gespeichert sind.`}
     >
       {connected ? (
-        <p className="text-sm">Connected {connected}.</p>
+        <p className="text-sm">{connected} verbunden.</p>
       ) : null}
       {error ? (
-        <p className="text-sm text-red-700" role="alert">
+        <p className="text-sm text-danger" role="alert">
           {error}
         </p>
       ) : null}
       <p className="text-sm text-muted">
-        Back to{" "}
-        <Link
-          className="underline underline-offset-4"
-          href={`/chat?rentalId=${rentalId}`}
-        >
-          chat
-        </Link>
-        .
+        Zurück zum{" "}
+        <ButtonLink href={chatRentalHref(rentalId)} variant="ghost" size="sm">
+          Chat
+        </ButtonLink>
       </p>
       <ConnectorPanel
         rentalId={rentalId}

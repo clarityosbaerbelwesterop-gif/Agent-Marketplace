@@ -9,19 +9,15 @@ import {
 } from "@/lib/auth/actions";
 
 const fieldClass =
-  "mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-foreground";
+  "mt-1 w-full rounded-md border border-border bg-surface-raised px-3 py-2 text-sm text-foreground placeholder:text-muted";
 const labelClass = "text-sm font-medium";
-const buttonClass =
-  "rounded-md border border-foreground bg-foreground px-3 py-2 text-sm font-medium text-background disabled:opacity-60";
-const ghostButtonClass =
-  "rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-border/40";
 
 function ErrorText({ error }: { error?: string }) {
   if (!error) {
     return null;
   }
   return (
-    <p className="text-sm text-red-700" role="alert">
+    <p className="text-sm text-danger" role="alert">
       {error}
     </p>
   );
@@ -67,7 +63,11 @@ export function LoginForms() {
           />
         </label>
         <ErrorText error={signInState?.error} />
-        <button className={buttonClass} type="submit" disabled={signInPending}>
+        <button
+          className="inline-flex h-11 items-center justify-center rounded-md bg-accent px-4 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+          type="submit"
+          disabled={signInPending}
+        >
           {signInPending ? "Signing in…" : "Sign in"}
         </button>
       </form>
@@ -106,7 +106,11 @@ export function LoginForms() {
           />
         </label>
         <ErrorText error={signUpState?.error} />
-        <button className={buttonClass} type="submit" disabled={signUpPending}>
+        <button
+          className="inline-flex h-11 items-center justify-center rounded-md bg-accent px-4 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+          type="submit"
+          disabled={signUpPending}
+        >
           {signUpPending ? "Creating account…" : "Create account"}
         </button>
       </form>
@@ -114,7 +118,7 @@ export function LoginForms() {
       <form action={googleAction} className="md:col-span-2">
         <ErrorText error={googleState?.error} />
         <button
-          className={ghostButtonClass}
+          className="inline-flex h-11 items-center justify-center rounded-md bg-surface-raised px-4 text-sm font-medium ring-1 ring-border hover:bg-accent-subtle disabled:opacity-60"
           type="submit"
           disabled={googlePending}
         >

@@ -246,7 +246,7 @@ export function ChatClient({
         )}
       </ol>
       {error ? (
-        <p className="text-sm text-red-700" role="alert">
+      <p className="text-sm text-danger" role="alert">
           {error}
         </p>
       ) : null}
@@ -254,7 +254,7 @@ export function ChatClient({
         <label className="text-sm">
           Message
           <textarea
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+            className="mt-1 w-full rounded-md border border-border bg-surface-raised px-3 py-2 text-sm"
             rows={3}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
@@ -270,7 +270,7 @@ export function ChatClient({
           Continue in background (queue the run, no live stream)
         </label>
         <button
-          className="w-fit rounded-md border border-foreground bg-foreground px-3 py-2 text-sm font-medium text-background disabled:opacity-60"
+          className="inline-flex h-11 w-fit items-center justify-center rounded-md bg-accent px-4 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
           type="submit"
           disabled={busy || !draft.trim()}
         >
@@ -282,10 +282,10 @@ export function ChatClient({
           className="underline underline-offset-4"
           href={`/connectors?rentalId=${rentalId}`}
         >
-          Connectors
+          Konnektoren
         </Link>{" "}
-        for this rental (Neon, GitHub, Slack, Vercel, Supabase, Render, Stripe,
-        Cursor). The agent only receives tools for active grants.
+        für diese Miete (Neon, GitHub, Slack, Vercel, Supabase, Render, Stripe,
+        Cursor). Der Agent bekommt nur Tools für aktive Grants.
       </p>
     </div>
   );

@@ -1,20 +1,28 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { PageShell } from "@/components/page-shell";
 import { ConnectorDiscoverSearch } from "@/components/connector-discover-search";
+import { ButtonLink } from "@/components/ui/button-link";
+import { PageShell } from "@/components/page-shell";
 import { DISCOVERY_SOURCES } from "@/lib/connectors/discovery";
 
 export const metadata: Metadata = {
-  title: "MCP discovery",
+  title: "MCP entdecken",
+  description:
+    "Catalog-only Suche in der offiziellen MCP-Registry und GitHub-Topics. Nichts wird installiert oder gewährt.",
 };
 
 export default function ConnectorDiscoverPage() {
   return (
     <PageShell
-      title="MCP discovery"
-      description="Catalog-only search of the official MCP registry and curated GitHub topics. Nothing here is auto-installed or granted. Runtime connectors remain the first-wave eight."
+      eyebrow="Konnektoren"
+      title="MCP entdecken"
+      description="Nur Katalogsuche. Runtime-Konnektoren bleiben die First-Wave-Acht. Nichts hier ist grantable."
+      actions={
+        <ButtonLink href="/connectors" variant="secondary">
+          Grants
+        </ButtonLink>
+      }
     >
-      <ul className="text-sm text-muted">
+      <ul className="flex list-disc flex-col gap-2 pl-5 text-sm leading-relaxed text-muted">
         {DISCOVERY_SOURCES.map((source) => (
           <li key={source.id}>
             {source.name} — {source.notes}{" "}
@@ -24,19 +32,12 @@ export default function ConnectorDiscoverPage() {
               rel="noreferrer"
               target="_blank"
             >
-              docs
+              Docs
             </a>
           </li>
         ))}
       </ul>
       <ConnectorDiscoverSearch />
-      <p className="text-sm text-muted">
-        Grantable connectors live on{" "}
-        <Link className="underline underline-offset-4" href="/connectors">
-          /connectors
-        </Link>
-        .
-      </p>
     </PageShell>
   );
 }

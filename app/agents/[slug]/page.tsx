@@ -1,36 +1,41 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AgentProfile } from "@/components/agent/agent-profile";
 import { PageShell } from "@/components/page-shell";
-import { StartRentalCheckoutForm } from "@/components/start-rental-checkout-form";
 import { getVerifiedSession } from "@/lib/auth/server";
+import { parseCompareSlugs } from "@/lib/catalog/compare-params";
 import { getAgentBySlug, isDatabaseConfigured } from "@/lib/catalog/queries";
-import { mergeAgentAndSupportedConnectors } from "@/lib/connectors";
+import { firstSearchParam } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-type AgentPageProps = PageProps<"/agents/[slug]">;
-
 export async function generateMetadata({
   params,
-}: AgentPageProps): Promise<Metadata> {
+}: PageProps<"/agents/[slug]">): Promise<Metadata> {
   const { slug } = await params;
   if (!isDatabaseConfigured()) {
     return { title: "Agent" };
   }
   const agent = await getAgentBySlug(slug);
-  return { title: agent?.name ?? "Agent" };
+  return {
+    title: agent?.name ?? "Agent nicht gefunden",
+    description: agent?.tagline ?? agent?.description,
+  };
 }
 
-export default async function AgentPage({ params }: AgentPageProps) {
+export default async function AgentPage({
+  params,
+  searchParams,
+}: PageProps<"/agents/[slug]">) {
   const { slug } = await params;
+  const query = await searchParams;
   const session = await getVerifiedSession();
 
   if (!isDatabaseConfigured()) {
     return (
       <PageShell
         title="Agent"
-        description="Catalog database is not configured on this server."
+        description="Katalogdatenbank ist auf diesem Server nicht konfiguriert."
       >
         <p className="text-sm">
           Slug: <code className="font-mono">{slug}</code>
@@ -44,119 +49,17 @@ export default async function AgentPage({ params }: AgentPageProps) {
     notFound();
   }
 
-  const durations = agent.rentalOptions.durations ?? [];
-  const connectors = mergeAgentAndSupportedConnectors(agent.connectors ?? []);
+  const durationId = firstSearchParam(query.duration);
+  const compare = parseMarketplaceCompare(query);
 
   return (
-    <PageShell title={agent.name} description={agent.tagline ?? agent.description}>
-      <dl className="grid max-w-xl gap-2 text-sm">
-        <div className="flex justify-between gap-4">
-          <dt className="text-muted">Category</dt>
-          <dd>{agent.category}</dd>
-        </div>
-        <div className="flex justify-between gap-4">
-          <dt className="text-muted">Tier</dt>
-          <dd>{agent.tier}</dd>
-        </div>
-        <div className="flex justify-between gap-4">
-          <dt className="text-muted">Model alias</dt>
-          <dd>{agent.modelAlias ?? "—"}</dd>
-        </div>
-        <div className="flex justify-between gap-4">
-          <dt className="text-muted">Skill package</dt>
-          <dd className="font-mono text-xs">{agent.skillPackageVersion ?? "—"}</dd>
-        </div>
-        <div className="flex justify-between gap-4">
-          <dt className="text-muted">Rating status</dt>
-          <dd>{agent.ratingStatus}</dd>
-        </div>
-        <div className="flex justify-between gap-4">
-          <dt className="text-muted">Availability</dt>
-          <dd>{agent.availability}</dd>
-        </div>
-      </dl>
-
-      <p className="max-w-2xl text-sm leading-relaxed">{agent.description}</p>
-
-      <p className="text-sm">
-        <Link
-          className="underline underline-offset-4"
-          href={`/compare?slugs=${encodeURIComponent(agent.slug)}`}
-        >
-          Compare
-        </Link>{" "}
-        <span className="text-muted">
-          this agent (add more slugs from the marketplace).
-        </span>
-      </p>
-
-      {durations.length > 0 ? (
-        <section className="flex flex-col gap-2">
-          <h2 className="text-sm font-medium">Rental options</h2>
-          <ul className="text-sm text-muted">
-            {durations.map((duration) => (
-              <li key={duration.id}>
-                {duration.label}: {(duration.priceCents / 100).toFixed(2)}{" "}
-                {duration.currency} · {duration.usageIncluded.toLocaleString()}{" "}
-                {agent.rentalOptions.usageUnit ?? "tokens"} included
-              </li>
-            ))}
-          </ul>
-          {session?.user ? (
-            <StartRentalCheckoutForm
-              slug={agent.slug}
-              durations={durations.map((duration) => ({
-                id: duration.id,
-                label: duration.label,
-                priceCents: duration.priceCents,
-                currency: duration.currency,
-              }))}
-            />
-          ) : (
-            <p className="text-sm text-muted">
-              <Link className="underline underline-offset-4" href="/login">
-                Sign in
-              </Link>{" "}
-              to pay with Stripe Checkout.
-            </p>
-          )}
-        </section>
-      ) : null}
-
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium">Connectors</h2>
-        <p className="text-sm text-muted">
-          First-wave grants during a rental: Neon, GitHub, Slack, Vercel,
-          Supabase, Render, Stripe, Cursor. OAuth/API keys are tenant grants —
-          not marketplace Checkout and not live until configured.
-        </p>
-        <ul className="text-sm text-muted">
-          {connectors.map((connector) => (
-            <li key={connector.provider}>
-              {connector.provider}
-              {connector.required ? " (required)" : ""}
-              {connector.scopes && connector.scopes.length > 0
-                ? ` · ${connector.scopes.join(", ")}`
-                : ""}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      {agent.skills.length > 0 ? (
-        <section className="flex flex-col gap-2">
-          <h2 className="text-sm font-medium">Skill package</h2>
-          {agent.skills.map((skill) => (
-            <p key={skill.id} className="max-w-2xl text-sm leading-relaxed text-muted">
-              <span className="font-mono text-xs text-foreground">
-                {skill.slug}@{skill.version}
-              </span>
-              {" — "}
-              {skill.instructions}
-            </p>
-          ))}
-        </section>
-      ) : null}
-    </PageShell>
+    <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6 sm:py-14">
+      <AgentProfile
+        agent={agent}
+        durationId={durationId}
+        compare={compare}
+        signedIn={Boolean(session?.user)}
+      />
+    </main>
   );
 }

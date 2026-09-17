@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
 
 export function EndRentalForm({ rentalId }: { rentalId: string }) {
   const router = useRouter();
@@ -12,7 +13,7 @@ export function EndRentalForm({ rentalId }: { rentalId: string }) {
     if (busy) {
       return;
     }
-    if (!window.confirm("End this rental? Chat and queued runs will stop.")) {
+    if (!window.confirm("Miete beenden? Chat und laufende Jobs stoppen.")) {
       return;
     }
     setBusy(true);
@@ -25,11 +26,13 @@ export function EndRentalForm({ rentalId }: { rentalId: string }) {
       });
       const payload = (await response.json()) as { error?: string };
       if (!response.ok) {
-        throw new Error(payload.error || "Could not end rental");
+        throw new Error(payload.error || "Miete konnte nicht beendet werden");
       }
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not end rental");
+      setError(
+        err instanceof Error ? err.message : "Miete konnte nicht beendet werden",
+      );
       setBusy(false);
     }
   }
@@ -37,22 +40,23 @@ export function EndRentalForm({ rentalId }: { rentalId: string }) {
   return (
     <div className="flex flex-col gap-2">
       <p className="text-sm text-muted">
-        Ending closes this rental, open chat sessions, and queued or running
-        jobs. Chat will reject further turns.
+        Beenden schließt diese Miete, offene Chat-Sitzungen und queued/running
+        Jobs. Weitere Turns werden abgelehnt.
       </p>
       {error ? (
-        <p className="text-sm text-red-700" role="alert">
+        <p className="text-sm text-danger" role="alert">
           {error}
         </p>
       ) : null}
-      <button
-        className="w-fit rounded-md border border-border px-3 py-2 text-sm font-medium disabled:opacity-60"
+      <Button
         type="button"
+        variant="danger"
+        size="sm"
         onClick={() => void onEnd()}
         disabled={busy}
       >
-        {busy ? "Ending…" : "End rental"}
-      </button>
+        {busy ? "Beende…" : "Miete beenden"}
+      </Button>
     </div>
   );
 }

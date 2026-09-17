@@ -25,7 +25,7 @@ export function PaymentPendingNotice({ rentalId }: { rentalId: string }) {
         }
       } catch {
         if (!cancelled) {
-          setError("Could not refresh rental status.");
+          setError("Mietstatus konnte nicht aktualisiert werden.");
         }
       }
     }
@@ -43,15 +43,15 @@ export function PaymentPendingNotice({ rentalId }: { rentalId: string }) {
   return (
     <div className="flex max-w-xl flex-col gap-2 text-sm">
       <p>
-        Waiting for Stripe to confirm payment. This page does not treat the
-        Checkout redirect as success.
+        Warten auf Stripe-Bestätigung. Diese Seite wertet den Checkout-Redirect
+        nicht als Erfolg.
       </p>
       {error ? (
-        <p className="text-red-700" role="alert">
+        <p className="text-danger" role="alert">
           {error}
         </p>
       ) : (
-        <p className="text-muted">Checking rental status…</p>
+        <p className="text-muted">Mietstatus wird geprüft…</p>
       )}
     </div>
   );

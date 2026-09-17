@@ -10,9 +10,9 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # Agent Marketplace
 
-This repository is a rentable AI-agent marketplace: browse agents, rent access with Stripe Checkout, chat with a rented agent, and pay through Stripe. Auth, paginated catalog API, a privileged 10k-row seed, the UNOROUTER adapter, and the agent runtime (sessions/runs/streaming) are in place. Stripe Checkout + signed webhooks activate rentals; keys are env-driven (deploy owns secrets).
+This repository is a rentable AI-agent marketplace: browse agents, rent access with Stripe Checkout, chat with a rented agent, and pay through Stripe. Auth, paginated catalog API, a privileged 10k-row seed, the UNOROUTER adapter, and the agent runtime (sessions/runs/streaming) are in place. Stripe Checkout + signed webhooks activate rentals; keys are env-driven (deploy owns secrets). The Design/UI layer styles those flows; it does not replace the catalog with fixtures.
 
-Do not ship a mock Stripe checkout that looks real. Do not invent benchmarks, success rates, or user counts on catalog rows. Do not send the full catalog to the browser — always paginate server-side. Do not re-seed the 10k catalog unless the generator itself changed. Do not activate a rental from a client success redirect.
+Do not ship a mock Stripe checkout that looks real. Do not invent benchmarks, success rates, or user counts on catalog rows. Do not send the full catalog to the browser — always paginate server-side. Do not re-seed the 10k catalog unless the generator itself changed. Do not activate a rental from a client success redirect. `lib/fixtures/` is a small design sample set, not live inventory.
 
 ## Stack
 
@@ -42,10 +42,11 @@ Neon project (docs only): `calm-fog-88681490`, default branch `main` / `br-young
 | `app/api/auth/[...path]` | Neon Auth proxy (`auth.handler()`) |
 | `app/api/agents` | Paginated public catalog |
 | `app/api/favorites` | Auth-required favorites |
-| `components/` | Shared UI |
+| `components/` | Shared UI (design system + route chrome) |
 | `lib/` | Shared utilities and server helpers |
 | `lib/auth/` | Neon Auth server instance, session helpers, server actions |
 | `lib/catalog/` | Catalog query parsing, list/detail/compare, favorites |
+| `lib/fixtures/` | Small **UI-only** sample profiles. Not the 10k seed. Not sent as the marketplace list. |
 | `lib/unorouter/` | UnoRouter OpenAI-compatible adapter, alias map, capabilities |
 | `lib/runtime/` | Sessions, runs, memories, skill loop; connector tools gated on grants |
 | `lib/connectors/` | First-party connector registry, grant CRUD, OAuth callbacks, runtime tools |
