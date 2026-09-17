@@ -27,7 +27,7 @@ Integrations:
 
 - Lakebase Postgres via Neon (`DATABASE_URL`) — schema + RLS in this repo
 - Neon Auth (Managed Better Auth) via `@neondatabase/auth` — tables already exist in schema `neon_auth`; do **not** recreate them or add a second auth library
-- Stripe billing — official `stripe` SDK. Secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`. `POST /api/rentals` creates `rentals.status=pending` and a Checkout Session (`mode=payment`; catalog durations are one-time hour windows, not subscriptions). `POST /api/webhooks/stripe` verifies the signature and is the only path that sets `active`, `starts_at` / `ends_at`, and Stripe ids. Success URL is `/chat?rentalId=` but must not be trusted. Missing keys → HTTP 503 (no unpaid bypass).
+- Stripe billing — official `stripe` SDK. Secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`. `POST /api/rentals` and `POST /api/checkout` create `rentals.status=pending` and a Checkout Session (`mode=payment`; catalog durations are one-time hour windows, not subscriptions). `POST /api/webhooks/stripe` verifies the signature and is the only path that sets `active`, `starts_at` / `ends_at`, and Stripe ids. Success URL is `/chat?rentalId=` but must not be trusted. Missing keys → HTTP 503 (no unpaid bypass).
 - Model routing via UnoRouter (`UNOROUTER_API_KEY`, optional `UNOROUTER_BASE_URL`). Catalog rows still store **model aliases** (`standard` / `advanced` / `expert` / `elite` / `frontier`). `lib/unorouter/` maps those aliases to documented UnoRouter model IDs. Same-tier fallbacks never silently downgrade a premium alias to a much weaker model. If the key is missing, adapter code still loads; runtime calls fail with HTTP 503 and a clear message.
 
 Use **one** auth system (Neon Auth). Do not introduce a second auth library.
@@ -69,6 +69,7 @@ Route files live next to the URL they represent:
 - `GET /api/agents/[slug]` → agent detail + published skill package
 - `GET|POST /api/favorites`, `DELETE /api/favorites/[slug]` → session-required; uses `withUserRls`
 - `GET|POST /api/rentals` → list / create pending rental + Stripe Checkout Session (`checkoutUrl`)
+- `POST /api/checkout` → same create path as `POST /api/rentals`; also returns `url` for the hosted Checkout redirect
 - `POST /api/rentals/[id]/checkout` → resume an open Checkout Session for a pending rental
 - `POST /api/rentals/[id]/renew` → Checkout Session to extend an already-paid rental
 - `POST /api/webhooks/stripe` → signed `checkout.session.completed` / `payment_intent.succeeded` (idempotent)
@@ -76,6 +77,7 @@ Route files live next to the URL they represent:
 - `GET /api/sessions/[id]`, `GET /api/runs/[id]` → poll durable run status
 - `GET|POST /api/memories` → user/workspace memory via `withUserRls`
 - `GET /api/connectors` → first-party connector catalog (auth). Optional `rentalId` / `sessionId` / `workspaceId` attaches grants
+- `GET /api/connectors/providers` → public first-wave provider list (no session)
 - `GET|POST|DELETE /api/connectors/grants` → list / request / revoke; RLS via `withUserRls`
 - `GET /api/connectors/oauth/[provider]/callback` → GitHub / Slack / Vercel OAuth code exchange
 
@@ -175,7 +177,7 @@ Apply `drizzle/*.sql` to Neon in order. Then run `pnpm db:seed:agents` against `
 
 ## First-party connectors
 
-Canonical ids: `neon`, `github`, `slack`, `vercel`, `supabase`, `render`, `stripe`, `cursor`. Registry: `lib/connectors/registry.ts` (display name, description, scopes, env/secret names, capability tags). These are **tenant grants during a rental**, not Cursor/Grok Bot marketplace plugins. Catalog seed still emits `postgres` on some rows; runtime maps that to `neon` without a re-seed.
+Canonical ids: `neon`, `github`, `slack`, `vercel`, `supabase`, `render`, `stripe`, `cursor`. Registry: `lib/connectors/registry.ts` (display name, description, scopes, env/secret names, capability tags). These are **tenant grants during a rental**, not Cursor/Grok Bot marketplace plugins. Catalog seed still emits a few legacy ids (`postgres`, `figma`, …); runtime aliases them onto the first-party set without a re-seed. Agent pages merge that set with the profile’s `connectors` JSON. After a signed Checkout webhook activates a rental, pending grant stubs for the eight providers are inserted (not marked active).
 
 | Connector | Auth | Platform env | Tenant secrets |
 | --- | --- | --- | --- |
@@ -253,7 +255,7 @@ Webhook endpoint: `POST /api/webhooks/stripe`. Configure that URL in the Stripe 
 5. Purchase: `pending` → `active`, set `starts_at`/`ends_at` from purchased `durationHours`, store Stripe ids
 6. Renewal: `ends_at = max(ends_at, now) + durationHours`, `usage_included += purchased usage`
 
-`POST /api/rentals` `{ slug, durationId }` inserts `rentals.status=pending` and returns `checkoutUrl`. Hosted Checkout is `mode=payment` because catalog `rental_options.durations` are one-time hour windows (4h / 24h / 7d), not recurring subscriptions. `POST /api/rentals/[id]/renew` starts another Checkout Session for an already-paid rental.
+`POST /api/rentals` `{ slug, durationId }` inserts `rentals.status=pending` and returns `checkoutUrl`. `POST /api/checkout` is the same create path and also returns `url` for the hosted Checkout redirect. Hosted Checkout is `mode=payment` because catalog `rental_options.durations` are one-time hour windows (4h / 24h / 7d), not recurring subscriptions. `POST /api/rentals/[id]/renew` starts another Checkout Session for an already-paid rental.
 
 Webhook writes use `getDb()` (privileged). `rental_payments` and `stripe_events` have FORCE RLS and no authenticated policies.
 

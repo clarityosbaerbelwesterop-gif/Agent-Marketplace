@@ -94,6 +94,7 @@ See `AGENTS.md` for conventions for coding agents.
 - `GET /api/agents/[slug]` — detail JSON
 - `GET|POST /api/favorites`, `DELETE /api/favorites/[slug]` — session required
 - `GET|POST /api/rentals` — list / create pending rental + Stripe Checkout Session
+- `POST /api/checkout` — same create path; returns `url` / `checkoutUrl` for hosted Checkout
 - `POST /api/rentals/[id]/checkout` — resume Checkout
 - `POST /api/rentals/[id]/renew` — extend via Checkout
 - `POST /api/webhooks/stripe` — signed Stripe events (idempotent)
@@ -101,6 +102,7 @@ See `AGENTS.md` for conventions for coding agents.
 - `GET /api/sessions/[id]`, `GET /api/runs/[id]`
 - `GET|POST /api/memories`
 - `GET /api/connectors` — first-party connector catalog (optional rental/workspace grants)
+- `GET /api/connectors/providers` — public first-wave provider list
 - `GET|POST|DELETE /api/connectors/grants` — list / request / revoke
 - `GET /api/connectors/oauth/[provider]/callback` — GitHub / Slack / Vercel OAuth
 

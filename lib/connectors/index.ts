@@ -1,8 +1,9 @@
 export { CONNECTOR_IDS, CONNECTOR_LIST, CONNECTOR_REGISTRY, getConnector, isConnectorId, oauthEnvConfigured } from "./registry";
 export { canonicalConnectorId } from "./aliases";
-export { connectorCatalog } from "./serialize";
+export { connectorCatalog, mergeAgentAndSupportedConnectors } from "./serialize";
 export {
   activateOauthGrant,
+  ensurePendingConnectorGrantsForRental,
   listConnectorGrants,
   requestConnectorGrant,
   revokeConnectorGrant,
