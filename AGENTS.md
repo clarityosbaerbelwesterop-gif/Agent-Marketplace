@@ -114,7 +114,7 @@ await withUserRls(user.id, async (db) => {
 
 `withUserRls` opens a transaction, `set_config('request.jwt.claims', '{"sub":"<id>","role":"authenticated"}', true)`, and `SET LOCAL ROLE authenticated`. Pass only a server-verified user id.
 
-Roles `authenticated` and `anonymous` are `NOLOGIN`. The privileged role is a member of `authenticated` so it can `SET LOCAL ROLE authenticated`. If you later enable the Neon Data API, keep these role names; do not replace `auth.user_id()`.
+Roles `authenticated` and `anonymous` are `NOLOGIN`. The privileged login role is granted both so it can `SET LOCAL ROLE authenticated` or `SET LOCAL ROLE anonymous`. If you later enable the Neon Data API, keep these role names; do not replace `auth.user_id()`.
 
 ### RLS rules
 
