@@ -1,7 +1,8 @@
 /**
  * Stripe env helpers. Deploy/secrets own the live keys; this module only
  * reads `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and the public key.
- * Missing secrets must fail closed — never fall back to unpaid access.
+ * Missing secrets fail closed unless MARKETPLACE_ALLOW_UNPAID_ACCESS=1|true
+ * (staging only; see lib/runtime/unpaid-access.ts). Unset the flag in production.
  */
 
 export const STRIPE_NOT_CONFIGURED =

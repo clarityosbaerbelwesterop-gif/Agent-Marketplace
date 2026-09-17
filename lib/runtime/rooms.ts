@@ -55,8 +55,9 @@ export function validateGroupRentalIds(ids: string[]) {
 }
 
 /**
- * Open a group session for 2–4 active paid rentals owned by the same user
- * in one workspace. Host `rental_id` is the first member (RLS anchor).
+ * Open a group session for 2–4 active rentals owned by the same user
+ * in one workspace (Stripe-paid or staging unpaid_test). Host `rental_id`
+ * is the first member (RLS anchor).
  */
 export async function createGroupSession(input: {
   userId: string;

@@ -13,9 +13,11 @@ import type { AgentDetail } from "@/lib/catalog/types";
 export function CheckoutSummary({
   agent,
   durationId,
+  unpaidAccess = false,
 }: {
   agent: AgentDetail;
   durationId?: string;
+  unpaidAccess?: boolean;
 }) {
   const duration = pickDuration(agent, durationId);
   const durations = listDurations(agent);
@@ -60,8 +62,9 @@ export function CheckoutSummary({
         </dl>
       ) : null}
       <p className="text-xs leading-relaxed text-muted">
-        Hosted Stripe Checkout (`mode=payment`). Die Miete bleibt `pending`, bis
-        der signierte Webhook bestätigt — nicht durch diese Seite.
+        {unpaidAccess
+          ? "MARKETPLACE_ALLOW_UNPAID_ACCESS: sofort aktive Testmiete ohne Checkout Session und ohne Karten-UI."
+          : "Hosted Stripe Checkout (`mode=payment`). Die Miete bleibt `pending`, bis der signierte Webhook bestätigt — nicht durch diese Seite."}
       </p>
     </Card>
   );
@@ -71,10 +74,12 @@ export function CheckoutPayPanel({
   agent,
   durationId,
   signedIn,
+  unpaidAccess = false,
 }: {
   agent: AgentDetail;
   durationId?: string;
   signedIn: boolean;
+  unpaidAccess?: boolean;
 }) {
   const durations = listDurations(agent);
 
@@ -83,10 +88,14 @@ export function CheckoutPayPanel({
       <CardHeader>
         <div className="flex flex-wrap items-center gap-2">
           <CardTitle>Zahlung</CardTitle>
-          <Badge tone="outline">Stripe Checkout</Badge>
+          <Badge tone="outline">
+            {unpaidAccess ? "Testmodus" : "Stripe Checkout"}
+          </Badge>
         </div>
         <p className="text-sm leading-relaxed text-muted">
-          Kein Kartenformular auf dieser Seite. Stripe hostet die Zahlung.
+          {unpaidAccess
+            ? "Kein Stripe und kein Kartenformular. Live-Test vor der Stripe-Anbindung."
+            : "Kein Kartenformular auf dieser Seite. Stripe hostet die Zahlung."}
         </p>
       </CardHeader>
       {signedIn ? (
@@ -99,13 +108,16 @@ export function CheckoutPayPanel({
             currency: item.currency,
           }))}
           durationId={durationId}
+          unpaidAccess={unpaidAccess}
         />
       ) : (
         <p className="text-sm text-muted">
           <ButtonLink href="/login" variant="secondary" size="sm">
             Anmelden
           </ButtonLink>{" "}
-          um mit Stripe zu bezahlen.
+          {unpaidAccess
+            ? "um eine Testmiete zu starten."
+            : "um mit Stripe zu bezahlen."}
         </p>
       )}
     </Card>

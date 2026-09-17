@@ -27,7 +27,7 @@ Integrations:
 
 - Lakebase Postgres via Neon (`DATABASE_URL`) — schema + RLS in this repo
 - Neon Auth (Managed Better Auth) via `@neondatabase/auth` — tables already exist in schema `neon_auth`; do **not** recreate them or add a second auth library
-- Stripe billing — official `stripe` SDK. Secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`. `POST /api/rentals` and `POST /api/checkout` create `rentals.status=pending` and a Checkout Session (`mode=payment`; catalog durations are one-time hour windows, not subscriptions). `POST /api/webhooks/stripe` verifies the signature and is the only path that sets `active`, `starts_at` / `ends_at`, and Stripe ids. Success URL is `/chat?rentalId=` but must not be trusted. Missing keys → HTTP 503 (no unpaid bypass).
+- Stripe billing — official `stripe` SDK. Secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`. `POST /api/rentals` and `POST /api/checkout` create `rentals.status=pending` and a Checkout Session (`mode=payment`; catalog durations are one-time hour windows, not subscriptions). `POST /api/webhooks/stripe` verifies the signature and is the only **Stripe** path that sets `active`, `starts_at` / `ends_at`, and Stripe ids. Success URL is `/chat?rentalId=` but must not be trusted. Missing keys → HTTP 503 unless `MARKETPLACE_ALLOW_UNPAID_ACCESS=1` (or `true`): then those two create routes insert an **active** rental immediately with Stripe ids null and `billing=unpaid_test` (no Checkout Session, no card UI). Chat/runtime treat `unpaid_test` active windows like paid active. Leave the flag unset in production.
 - Model routing via UnoRouter (`UNOROUTER_API_KEY`, optional `UNOROUTER_BASE_URL`) plus optional FreeLLM-API failover (`FREELLM_API_KEY`, optional `FREELLM_BASE_URL`). Catalog rows still store **model aliases** (`standard` / `advanced` / `expert` / `elite` / `frontier`). `lib/unorouter/` maps those aliases to documented UnoRouter model IDs. `lib/freellm/` is an OpenAI-compatible adapter for a self-hosted FreeLLM `/v1` router (documented `auto` / `auto:smart` / `auto:fast` strategies). Paid/Frontier turns prefer UNOROUTER; FreeLLM is failover / high-volume continuation. Same-tier UNOROUTER fallbacks never silently downgrade a premium alias to a much weaker model. If a paid alias is served by FreeLLM, the run records `provider_used`, the actual routed model id, and `downgradedFromPaid`. Missing keys → HTTP 503 (no unpaid bypass); either provider is enough to start a turn.
 
 Use **one** auth system (Neon Auth). Do not introduce a second auth library.
@@ -76,8 +76,8 @@ Route files live next to the URL they represent:
 - `GET /api/agents/compare` → side-by-side catalog fields for up to 4 slugs (no invented benchmarks)
 - `GET /api/agents/[slug]` → agent detail + published skill package
 - `GET|POST /api/favorites`, `DELETE /api/favorites/[slug]` → session-required; uses `withUserRls`
-- `GET|POST /api/rentals` → list / create pending rental + Stripe Checkout Session (`checkoutUrl`)
-- `POST /api/checkout` → same create path as `POST /api/rentals`; also returns `url` for the hosted Checkout redirect
+- `GET|POST /api/rentals` → list / create pending rental + Stripe Checkout Session (`checkoutUrl`). With `MARKETPLACE_ALLOW_UNPAID_ACCESS=1|true`, create returns an active `unpaid_test` rental (Stripe ids null, no Checkout Session)
+- `POST /api/checkout` → same create path as `POST /api/rentals`; also returns `url` (`checkoutUrl`, or `/chat?rentalId=` in unpaid test mode)
 - `POST /api/rentals/[id]/checkout` → resume an open Checkout Session for a pending rental
 - `POST /api/rentals/[id]/renew` → Checkout Session to extend an already-paid rental
 - `POST /api/rentals/[id]/end` → rental owner only: cancel active/pending rental, close open sessions, cancel queued/running runs, write `ended_at` / `ended_by_user_id` / `end_reason`
@@ -297,7 +297,7 @@ When the user has two or more **active** rentals in one workspace, `POST /api/ro
 
 **Shared learning network:** `memories.visibility` is `user` (default, private) or `workspace` (readable by every workspace member, including concurrent rented agents). Writes are one short RLS transaction each; there is no advisory lock that serializes all agents. Isolation remains user + workspace + RLS.
 
-**Group chat:** `POST /api/sessions` `{ kind: "group", rentalIds }` opens an `agent_sessions.kind=group` room with `agent_session_members`. Only the signed-in user's **active paid** rentals in the same workspace may join (2–4). `POST /api/chat` with that `sessionId` fans the turn to each remaining member. Ending a rental removes it from rooms and closes the group when fewer than two paid members remain.
+**Group chat:** `POST /api/sessions` `{ kind: "group", rentalIds }` opens an `agent_sessions.kind=group` room with `agent_session_members`. Only the signed-in user's **active** rentals in the same workspace may join (2–4), including staging `unpaid_test` windows. `POST /api/chat` with that `sessionId` fans the turn to each remaining member. Ending a rental removes it from rooms and closes the group when fewer than two paid members remain.
 
 **Dedicated agent rooms:** `POST /api/rooms` uses `agent_rooms` (not group sessions). Fan-out is one coordinated turn per member; see `/rooms`.
 
@@ -307,11 +307,11 @@ Connector grants: first-party App MCP set in `lib/connectors/` (`neon`, `github`
 
 OAuth (authorization code) is implemented for GitHub, Slack, and Vercel when `*_CLIENT_ID` / `*_CLIENT_SECRET` plus a ≥32-char state secret (`CONNECTOR_OAUTH_STATE_SECRET` or `NEON_AUTH_COOKIE_SECRET`) are set. Callbacks: `/api/connectors/oauth/{github|slack|vercel}/callback`. If OAuth env is missing, POST leaves the grant **pending** (no fake success). API-key connectors become active only when the required tenant secrets are posted. `stubGrant` is not supported. The Stripe **connector** is tenant API access for a rented agent, not marketplace Checkout.
 
-Chat and session APIs call `rentalAccessError()` / `rentalIsActive()` (`status=active` and `ends_at` still in the future). Pending, canceled (ended), refunded, and expired windows return HTTP 409. `POST /api/rentals/[id]/end` is rental-owner only: sets `status=canceled`, writes audit columns, closes open `agent_sessions`, cancels `queued`/`running` `agent_runs`, and expires open Stripe Checkout Sessions when keys are present. In-flight runs check that status between tool rounds and stop without overwriting a canceled row to failed.
+Chat and session APIs call `rentalAccessError()` / `rentalIsActive()` (`status=active` and `ends_at` still in the future). Staging `unpaid_test` active rentals pass the same checks as Stripe-paid ones. Pending, canceled (ended), refunded, and expired windows return HTTP 409. `POST /api/rentals/[id]/end` is rental-owner only: sets `status=canceled`, writes audit columns, closes open `agent_sessions`, cancels `queued`/`running` `agent_runs`, and expires open Stripe Checkout Sessions when keys are present. In-flight runs check that status between tool rounds and stop without overwriting a canceled row to failed.
 
 ## Stripe
 
-Official `stripe` SDK in `lib/stripe/`. Canonical secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`. Success/cancel URLs use `NEXT_PUBLIC_APP_URL` (fallback `VERCEL_URL`). Deploy owns live keys; empty keys make checkout/webhook routes return 503. There is no unpaid-access bypass.
+Official `stripe` SDK in `lib/stripe/`. Canonical secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`. Success/cancel URLs use `NEXT_PUBLIC_APP_URL` (fallback `VERCEL_URL`). Deploy owns live keys; empty keys make checkout/webhook routes return 503 **unless** `MARKETPLACE_ALLOW_UNPAID_ACCESS=1` or `true` (staging / live user testing before Stripe is wired). That flag is the only unpaid bypass: `POST /api/rentals` and `POST /api/checkout` then insert `rentals.status=active` immediately with Stripe ids null and `billing=unpaid_test`. No Checkout Session is created and the UI must not show a fake card form. Leave the flag unset in production.
 
 Webhook endpoint: `POST /api/webhooks/stripe`. Configure that URL in the Stripe Dashboard (events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `payment_intent.succeeded`, plus `checkout.session.expired` / `checkout.session.async_payment_failed` to mark open payments canceled). The handler:
 
@@ -322,7 +322,7 @@ Webhook endpoint: `POST /api/webhooks/stripe`. Configure that URL in the Stripe 
 5. Purchase: `pending` → `active`, set `starts_at`/`ends_at` from purchased `durationHours`, store Stripe ids
 6. Renewal: `ends_at = max(ends_at, now) + durationHours`, `usage_included += purchased usage`
 
-`POST /api/rentals` `{ slug, durationId }` inserts `rentals.status=pending` and returns `checkoutUrl`. `POST /api/checkout` is the same create path and also returns `url` for the hosted Checkout redirect. Hosted Checkout is `mode=payment` because catalog `rental_options.durations` are one-time hour windows (4h / 24h / 7d), not recurring subscriptions. `POST /api/rentals/[id]/renew` starts another Checkout Session for an already-paid rental. `POST /api/rentals/[id]/end` is not a Stripe refund: it stops access for the renter.
+`POST /api/rentals` `{ slug, durationId }` inserts `rentals.status=pending` and returns `checkoutUrl` when Stripe is required. With `MARKETPLACE_ALLOW_UNPAID_ACCESS`, the same body creates an active `unpaid_test` rental (no `checkoutUrl`). `POST /api/checkout` is the same create path and also returns `url` (hosted Checkout, or `/chat?rentalId=` in unpaid test mode). Hosted Checkout is `mode=payment` because catalog `rental_options.durations` are one-time hour windows (4h / 24h / 7d), not recurring subscriptions. `POST /api/rentals/[id]/renew` starts another Checkout Session for an already-paid rental. `POST /api/rentals/[id]/end` is not a Stripe refund: it stops access for the renter.
 
 Webhook writes use `getDb()` (privileged). `rental_payments` and `stripe_events` have FORCE RLS and no authenticated policies.
 
@@ -343,6 +343,7 @@ Do this once on the production Neon branch and the linked Vercel project before 
 | Variable | Notes |
 | --- | --- |
 | `NEXT_PUBLIC_APP_URL` | Public origin used for Stripe success/cancel URLs and OAuth callbacks |
+| `MARKETPLACE_ALLOW_UNPAID_ACCESS` | Staging only. `1` or `true` lets `POST /api/rentals` and `POST /api/checkout` create active `unpaid_test` rentals without Stripe. **Must be unset in production.** |
 
 **Neon (Lakebase Postgres)**
 
@@ -369,7 +370,7 @@ Do this once on the production Neon branch and the linked Vercel project before 
 | `STRIPE_WEBHOOK_SECRET` | Signing secret for the production webhook endpoint |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Matching `pk_live_…` / `pk_test_…` |
 
-Empty Stripe keys make checkout and webhook routes return HTTP 503. There is no unpaid bypass.
+Empty Stripe keys make checkout and webhook routes return HTTP 503. There is no unpaid bypass unless `MARKETPLACE_ALLOW_UNPAID_ACCESS=1` or `true` (staging). Do not set that flag on Production.
 
 **UNOROUTER**
 
@@ -431,8 +432,8 @@ Then seed once: `pnpm db:seed:agents` (idempotent upsert; do not re-seed unless 
 
 - [ ] `GET /api/agents?pageSize=1` returns a page (not the full catalog).
 - [ ] Sign-in via `/login`; `/api/rentals` without a session is 401.
-- [ ] Create Checkout (`POST /api/checkout` and `POST /api/rentals` stay aligned: `{ slug, durationId }`; checkout also returns `url`).
-- [ ] Pay in Stripe test/live; webhook sets `rentals.status=active`. Client success URL `/chat?rentalId=` is **not** trusted.
+- [ ] Create Checkout (`POST /api/checkout` and `POST /api/rentals` stay aligned: `{ slug, durationId }`; checkout also returns `url`). With `MARKETPLACE_ALLOW_UNPAID_ACCESS` unset, missing Stripe keys still 503.
+- [ ] Pay in Stripe test/live; webhook sets `rentals.status=active`. Client success URL `/chat?rentalId=` is **not** trusted. Staging unpaid_test rentals skip this step and are already `active`.
 - [ ] Chat against that rental; ended/pending/expired rentals return HTTP 409 (`Rental has ended` / pending / expired copy).
 - [ ] `GET /api/agents?group=coding&pageSize=1` and `GET /api/agents?family=coding&pageSize=1` map existing software/frontend/… categories (no invented benchmarks).
 - [ ] `GET /api/connectors/discover?q=github` items have `grantable: false`.

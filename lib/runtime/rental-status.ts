@@ -1,6 +1,9 @@
 /**
  * Pure rental status helpers (no Stripe / DB). Chat, sessions, connectors,
  * and POST /api/rentals/[id]/end share these 409 messages.
+ *
+ * `status=active` windows are usable regardless of billing: Stripe-paid and
+ * staging `unpaid_test` rentals both pass `rentalIsActive` / `rentalAccessError`.
  */
 
 export const RENTAL_ENDABLE_STATUSES = ["pending", "active"] as const;

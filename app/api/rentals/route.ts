@@ -16,9 +16,10 @@ export async function GET() {
 }
 
 /**
- * Create a pending rental + Stripe Checkout Session.
- * Same body contract as POST /api/checkout (`slug`, `durationId`).
- * Checkout additionally aliases `url` = `checkoutUrl`.
+ * Create a pending rental + Stripe Checkout Session, or — when
+ * MARKETPLACE_ALLOW_UNPAID_ACCESS is set — an active unpaid_test rental
+ * (no Checkout Session). Same body as POST /api/checkout (`slug`, `durationId`).
+ * Checkout additionally aliases `url` = `checkoutUrl` (or the chat href in test mode).
  */
 export async function POST(request: Request) {
   return postCreateRentalCheckout(request);

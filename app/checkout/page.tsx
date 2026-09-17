@@ -11,6 +11,7 @@ import { getVerifiedSession } from "@/lib/auth/server";
 import { getAgentBySlug, isDatabaseConfigured } from "@/lib/catalog/queries";
 import { CONNECTOR_LIST } from "@/lib/connectors";
 import { getRentalForUser, rentalIsActive } from "@/lib/runtime/rentals";
+import { isUnpaidAccessAllowed } from "@/lib/runtime/unpaid-access";
 import { chatRentalHref } from "@/lib/urls";
 import { firstSearchParam } from "@/lib/utils";
 
@@ -41,6 +42,7 @@ export default async function CheckoutPage({
   const canceled =
     params.canceled === "1" || params.canceled === "true";
   const session = await getVerifiedSession();
+  const unpaidAccess = isUnpaidAccessAllowed();
 
   if (!isDatabaseConfigured()) {
     return (
@@ -91,7 +93,9 @@ export default async function CheckoutPage({
             : active
               ? "Diese Miete ist aktiv. Öffnen Sie den Chat."
               : bundle.rental.status === "pending"
-                ? "Zahlung ausstehend. Setzen Sie Stripe Checkout fort. Der Erfolg-Redirect allein aktiviert nichts."
+                ? unpaidAccess
+                  ? "Zahlung ausstehend. Im Testmodus starten Sie eine neue Miete ohne Stripe."
+                  : "Zahlung ausstehend. Setzen Sie Stripe Checkout fort. Der Erfolg-Redirect allein aktiviert nichts."
                 : "Diese Miete wartet nicht auf Zahlung."
         }
       >
@@ -118,7 +122,11 @@ export default async function CheckoutPage({
       width="wide"
       eyebrow="Checkout"
       title="Miete prüfen"
-      description="Preis liegt offen. Weiter zu Stripe Checkout; die Miete wird erst per Webhook aktiv."
+      description={
+        unpaidAccess
+          ? "Preis liegt offen. Testmodus aktiviert die Miete sofort — ohne Stripe und ohne Kartenformular."
+          : "Preis liegt offen. Weiter zu Stripe Checkout; die Miete wird erst per Webhook aktiv."
+      }
     >
       {!agent ? (
         <div className="flex flex-col gap-4">
@@ -132,12 +140,17 @@ export default async function CheckoutPage({
         </div>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
-          <CheckoutSummary agent={agent} durationId={durationId} />
+          <CheckoutSummary
+            agent={agent}
+            durationId={durationId}
+            unpaidAccess={unpaidAccess}
+          />
           <div className="flex flex-col gap-4">
             <CheckoutPayPanel
               agent={agent}
               durationId={durationId}
               signedIn={Boolean(session?.user)}
+              unpaidAccess={unpaidAccess}
             />
             <FirstWaveConnectorsNote />
           </div>
