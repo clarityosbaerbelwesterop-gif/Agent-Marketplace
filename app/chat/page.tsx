@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PageShell } from "@/components/page-shell";
 import { ChatClient } from "@/components/chat-client";
+import { PaymentPendingNotice } from "@/components/payment-pending-notice";
+import { RenewRentalForm } from "@/components/renew-rental-form";
 import { getVerifiedSession } from "@/lib/auth/server";
 import { isDatabaseConfigured } from "@/lib/catalog/queries";
 import { listRentals, getRentalForUser, rentalIsActive } from "@/lib/runtime/rentals";
@@ -55,7 +57,7 @@ export default async function ChatPage({
     return (
       <PageShell
         title="Chat"
-        description="Pick an active unpaid access rental. Stripe checkout is not implemented."
+        description="Pick an active paid rental. Chat rejects pending, canceled, and expired windows."
       >
         {active.length === 0 ? (
           <p className="text-sm text-muted">
@@ -63,7 +65,7 @@ export default async function ChatPage({
             <Link className="underline underline-offset-4" href="/marketplace">
               Browse the catalog
             </Link>{" "}
-            and start unpaid access from an agent page.
+            and pay with Stripe Checkout from an agent page.
           </p>
         ) : (
           <ul className="flex flex-col gap-2 text-sm">
@@ -85,12 +87,50 @@ export default async function ChatPage({
   }
 
   const bundle = await getRentalForUser(session.user.id, rentalId);
-  if (!bundle || !rentalIsActive(bundle.rental)) {
+  if (!bundle) {
     return (
       <PageShell
         title="Chat"
-        description="That rental is missing or no longer active."
+        description="That rental is missing."
       >
+        <Link className="text-sm underline underline-offset-4" href="/chat">
+          Choose another rental
+        </Link>
+      </PageShell>
+    );
+  }
+
+  if (bundle.rental.status === "pending") {
+    return (
+      <PageShell
+        title={bundle.agent.name}
+        description="Payment is not confirmed yet. The Checkout success URL does not activate this rental."
+      >
+        <PaymentPendingNotice rentalId={rentalId} />
+        <Link
+          className="text-sm underline underline-offset-4"
+          href={`/checkout?rentalId=${rentalId}`}
+        >
+          Resume checkout
+        </Link>
+      </PageShell>
+    );
+  }
+
+  if (!rentalIsActive(bundle.rental)) {
+    const durations = bundle.agent.rentalOptions.durations ?? [];
+    return (
+      <PageShell
+        title="Chat"
+        description="That rental is not active or has expired."
+      >
+        <RenewRentalForm
+          rentalId={rentalId}
+          durations={durations.map((duration) => ({
+            id: duration.id,
+            label: duration.label,
+          }))}
+        />
         <Link className="text-sm underline underline-offset-4" href="/chat">
           Choose another rental
         </Link>
@@ -113,6 +153,7 @@ export default async function ChatPage({
   }
 
   const runs = await listSessionRuns(session.user.id, opened.data.session.id);
+  const durations = bundle.agent.rentalOptions.durations ?? [];
 
   return (
     <PageShell
@@ -130,6 +171,13 @@ export default async function ChatPage({
           skillVersion: run.skillVersion,
           input: run.input as { message?: unknown } | null,
           output: run.output as { text?: unknown; error?: unknown } | null,
+        }))}
+      />
+      <RenewRentalForm
+        rentalId={rentalId}
+        durations={durations.map((duration) => ({
+          id: duration.id,
+          label: duration.label,
         }))}
       />
     </PageShell>

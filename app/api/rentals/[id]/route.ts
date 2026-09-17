@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { jsonError, requireApiUser } from "@/lib/api/guard";
-import { getRentalForUser, rentalIsActive } from "@/lib/runtime/rentals";
+import { getRentalForUser, serializeRental } from "@/lib/runtime/rentals";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(
   _request: Request,
-  context: { params: Promise<{ id: string }> },
+  context: RouteContext<"/api/rentals/[id]">,
 ) {
   const auth = await requireApiUser();
   if (!auth.ok) {
@@ -17,15 +17,11 @@ export async function GET(
   if (!row) {
     return jsonError("Rental not found", 404);
   }
-  return NextResponse.json({
-    ...row.rental,
-    startsAt: row.rental.startsAt?.toISOString() ?? null,
-    endsAt: row.rental.endsAt?.toISOString() ?? null,
-    createdAt: row.rental.createdAt.toISOString(),
-    active: rentalIsActive(row.rental),
-    agentSlug: row.agent.slug,
-    agentName: row.agent.name,
-    agentTier: row.agent.tier,
-    billing: "unpaid_access",
-  });
+  return NextResponse.json(
+    serializeRental(row.rental, {
+      agentSlug: row.agent.slug,
+      agentName: row.agent.name,
+      agentTier: row.agent.tier,
+    }),
+  );
 }

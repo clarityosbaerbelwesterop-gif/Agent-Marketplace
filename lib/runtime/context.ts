@@ -89,7 +89,7 @@ export async function loadRuntimeContext(input: {
     if (!rentalIsActive(bundle.rental)) {
       return {
         ok: false as const,
-        error: "Rental is not active",
+        error: "Rental is not active or has expired",
         status: 409,
       };
     }

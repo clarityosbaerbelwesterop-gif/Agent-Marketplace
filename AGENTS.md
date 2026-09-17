@@ -10,9 +10,9 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # Agent Marketplace
 
-This repository is a rentable AI-agent marketplace: browse agents, start unpaid access (Stripe checkout is **not** implemented), and chat with a rented agent. Auth, paginated catalog API, a privileged 10k-row seed, the UNOROUTER adapter, and the agent runtime (sessions/runs/streaming) are in place.
+This repository is a rentable AI-agent marketplace: browse agents, rent access with Stripe Checkout, chat with a rented agent, and pay through Stripe. Auth, paginated catalog API, a privileged 10k-row seed, the UNOROUTER adapter, and the agent runtime (sessions/runs/streaming) are in place. Stripe Checkout + signed webhooks activate rentals; keys are env-driven (deploy owns secrets).
 
-Do not ship a mock Stripe checkout that looks real. Do not invent benchmarks, success rates, or user counts on catalog rows. Do not send the full catalog to the browser — always paginate server-side. Do not re-seed the 10k catalog unless the generator itself changed.
+Do not ship a mock Stripe checkout that looks real. Do not invent benchmarks, success rates, or user counts on catalog rows. Do not send the full catalog to the browser — always paginate server-side. Do not re-seed the 10k catalog unless the generator itself changed. Do not activate a rental from a client success redirect.
 
 ## Stack
 
@@ -27,7 +27,7 @@ Integrations:
 
 - Lakebase Postgres via Neon (`DATABASE_URL`) — schema + RLS in this repo
 - Neon Auth (Managed Better Auth) via `@neondatabase/auth` — tables already exist in schema `neon_auth`; do **not** recreate them or add a second auth library
-- Stripe billing — env placeholders only; `rentals.stripe_session_id` / `stripe_payment_intent_id` are nullable columns, not a checkout. `POST /api/rentals` creates **unpaid access** (`status=active`, Stripe ids null) so the runtime can run.
+- Stripe billing — official `stripe` SDK. Secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`. `POST /api/rentals` creates `rentals.status=pending` and a Checkout Session (`mode=payment`; catalog durations are one-time hour windows, not subscriptions). `POST /api/webhooks/stripe` verifies the signature and is the only path that sets `active`, `starts_at` / `ends_at`, and Stripe ids. Success URL is `/chat?rentalId=` but must not be trusted. Missing keys → HTTP 503 (no unpaid bypass).
 - Model routing via UnoRouter (`UNOROUTER_API_KEY`, optional `UNOROUTER_BASE_URL`). Catalog rows still store **model aliases** (`standard` / `advanced` / `expert` / `elite` / `frontier`). `lib/unorouter/` maps those aliases to documented UnoRouter model IDs. Same-tier fallbacks never silently downgrade a premium alias to a much weaker model. If the key is missing, adapter code still loads; runtime calls fail with HTTP 503 and a clear message.
 
 Use **one** auth system (Neon Auth). Do not introduce a second auth library.
@@ -48,6 +48,7 @@ Neon project (docs only): `calm-fog-88681490`, default branch `main` / `br-young
 | `lib/catalog/` | Catalog query parsing, list/detail, favorites |
 | `lib/unorouter/` | UnoRouter OpenAI-compatible adapter, alias map, capabilities |
 | `lib/runtime/` | Sessions, runs, memories, connector grant stubs, skill loop |
+| `lib/stripe/` | Stripe client, Checkout Session create, signed webhook apply |
 | `lib/db/` | Drizzle schema, privileged client, RLS session helper |
 | `drizzle/` | SQL migrations generated/applied with drizzle-kit |
 | `scripts/` | Privileged seed / ops (not a client path) |
@@ -64,8 +65,11 @@ Route files live next to the URL they represent:
 - `GET /api/agents` → paginated catalog (search, category, tier, sort, page, pageSize ≤ 50)
 - `GET /api/agents/[slug]` → agent detail + published skill package
 - `GET|POST /api/favorites`, `DELETE /api/favorites/[slug]` → session-required; uses `withUserRls`
-- `GET|POST /api/rentals` → list / create unpaid access (not Stripe)
-- `POST /api/chat` → authenticated SSE (or `{ background: true }` queue); persists `agent_runs`
+- `GET|POST /api/rentals` → list / create pending rental + Stripe Checkout Session (`checkoutUrl`)
+- `POST /api/rentals/[id]/checkout` → resume an open Checkout Session for a pending rental
+- `POST /api/rentals/[id]/renew` → Checkout Session to extend an already-paid rental
+- `POST /api/webhooks/stripe` → signed `checkout.session.completed` / `payment_intent.succeeded` (idempotent)
+- `POST /api/chat` → authenticated SSE (or `{ background: true }` queue); persists `agent_runs`; **rejects** non-active / expired rentals
 - `GET /api/sessions/[id]`, `GET /api/runs/[id]` → poll durable run status
 - `GET|POST /api/memories` → user/workspace memory via `withUserRls`
 - `GET /api/connectors`, `GET|POST /api/connectors/grants` → connector grant stub (OAuth not wired)
@@ -83,7 +87,9 @@ Public catalog is shared. Private rows are scoped to a Neon Auth user and/or wor
 | `agent_profiles` | Public catalog (slug unique). Visual identity, `model_config`, connectors, permissions, `rental_options` JSONB, tier, rating status | public **read**; writes: service / privileged role |
 | `agent_skills` | Versioned skill packages; `agent_profile_id` nullable for shared packs; `published` gate | public **read** where `published`; writes: privileged |
 | `favorites` | `(user_id, agent_profile_id)` | owning user |
-| `rentals` | Rental window, usage counters, nullable Stripe ids | renter or workspace member |
+| `rentals` | Rental window, usage counters, Stripe session/PI ids | renter or workspace member |
+| `rental_payments` | One Checkout/PaymentIntent per purchase or renewal; `applied_at` is the idempotency claim | privileged / webhook (`getDb()`) |
+| `stripe_events` | Processed Stripe event ids (PK) | privileged / webhook (`getDb()`) |
 | `agent_sessions` | Chat/runtime session under a rental | workspace member + visible rental |
 | `agent_runs` | Background work during a rental | via session visibility |
 | `memories` | User+workspace isolated notes (`kind` + `content`; no embedding column yet) | owning user in that workspace |
@@ -144,12 +150,13 @@ Every marketplace table has `ENABLE ROW LEVEL SECURITY` and `FORCE ROW LEVEL SEC
 | `workspace_members` | none | SELECT: member; writes: workspace owner. An `AFTER INSERT` trigger adds the owner as `owner` (SECURITY DEFINER). |
 | `favorites` | none | CRUD where `user_id` = self |
 | `rentals` | none | SELECT: renter or workspace member; INSERT: renter + member; DELETE: renter |
+| `rental_payments` / `stripe_events` | none | none (FORCE RLS; webhook uses `getDb()` / `neondb_owner`) |
 | `agent_sessions` / `agent_runs` | none | via `is_rental_visible` / `is_session_visible` |
 | `memories` / `connector_grants` | none | `user_id` = self **and** workspace member |
 
 Helper functions `is_workspace_member`, `is_workspace_owner`, `is_rental_visible`, `is_session_visible` are `SECURITY DEFINER` so policies do not recurse through RLS.
 
-Catalog writes (new agents, publishing skills, the 10k seed) go through `getDb()` / `neondb_owner`, not `authenticated`. Public catalog **reads** may use `getDb()` because `agent_profiles` is world-readable; still paginate and never return unpublished skills (`published = true` filter). User-scoped tables (favorites, rentals, memories, …) must use `withUserRls` after a server-verified session.
+Catalog writes (new agents, publishing skills, the 10k seed) go through `getDb()` / `neondb_owner`, not `authenticated`. Public catalog **reads** may use `getDb()` because `agent_profiles` is world-readable; still paginate and never return unpublished skills (`published = true` filter). User-scoped tables (favorites, rentals, memories, …) must use `withUserRls` after a server-verified session. Stripe webhook apply (`rental_payments`, `stripe_events`, activating/extending `rentals`) uses `getDb()` because Stripe has no user JWT.
 
 ### Commands
 
@@ -177,6 +184,7 @@ Apply `drizzle/*.sql` to Neon in order. Then run `pnpm db:seed:agents` against `
 - API proxy: `app/api/auth/[...path]/route.ts`.
 - Login UI: `/login` (email/password + Google). Sign-out is a server action.
 - `proxy.ts` protects `/account/*` only; catalog routes stay public. Chat and rental APIs require a server-verified session even though the pages are not in the matcher.
+- JWKS is for verifying raw JWTs (Better Auth JWT plugin) if a non-cookie caller appears later. The Next.js app uses the signed session cookie via `getSession()`, not a client-supplied Bearer token.
 
 ## UNOROUTER
 
@@ -206,8 +214,24 @@ Work is durable in Postgres (`queued` → `running` → `succeeded`/`failed`). `
 
 Connector grants: list/request only. OAuth is not wired; `stubGrant: true` marks a row `granted` for runtime tests and is not a payment.
 
-Unpaid access is **not** Stripe. `POST /api/rentals` `{ slug, durationId }` inserts `rentals.status=active` with null Stripe ids.
-- JWKS is for verifying raw JWTs (Better Auth JWT plugin) if a non-cookie caller appears later. The Next.js app uses the signed session cookie via `getSession()`, not a client-supplied Bearer token.
+Chat and session APIs call `rentalIsActive()` (`status=active` and `ends_at` still in the future). Pending, canceled, refunded, and expired windows return HTTP 409.
+
+## Stripe
+
+Official `stripe` SDK in `lib/stripe/`. Canonical secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`. Success/cancel URLs use `NEXT_PUBLIC_APP_URL` (fallback `VERCEL_URL`). Deploy owns live keys; empty keys make checkout/webhook routes return 503. There is no unpaid-access bypass.
+
+Webhook endpoint: `POST /api/webhooks/stripe`. Configure that URL in the Stripe Dashboard (events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `payment_intent.succeeded`, plus `checkout.session.expired` / `checkout.session.async_payment_failed` to mark open payments canceled). The handler:
+
+1. Reads the **raw** body and `stripe-signature`
+2. `constructEventAsync` with `STRIPE_WEBHOOK_SECRET` (reject unsigned payloads)
+3. Inserts `stripe_events.id` (PK). Duplicate deliveries return `{ received: true, duplicate: true }`
+4. Claims `rental_payments` with `UPDATE ... WHERE applied_at IS NULL`. A second event type for the same payment (`checkout.session.completed` then `payment_intent.succeeded`) does not extend `ends_at` twice
+5. Purchase: `pending` → `active`, set `starts_at`/`ends_at` from purchased `durationHours`, store Stripe ids
+6. Renewal: `ends_at = max(ends_at, now) + durationHours`, `usage_included += purchased usage`
+
+`POST /api/rentals` `{ slug, durationId }` inserts `rentals.status=pending` and returns `checkoutUrl`. Hosted Checkout is `mode=payment` because catalog `rental_options.durations` are one-time hour windows (4h / 24h / 7d), not recurring subscriptions. `POST /api/rentals/[id]/renew` starts another Checkout Session for an already-paid rental.
+
+Webhook writes use `getDb()` (privileged). `rental_payments` and `stripe_events` have FORCE RLS and no authenticated policies.
 
 ## Coding notes
 

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageShell } from "@/components/page-shell";
-import { StartUnpaidAccessForm } from "@/components/start-unpaid-access-form";
+import { StartRentalCheckoutForm } from "@/components/start-rental-checkout-form";
 import { getVerifiedSession } from "@/lib/auth/server";
 import { getAgentBySlug, isDatabaseConfigured } from "@/lib/catalog/queries";
 
@@ -89,7 +89,7 @@ export default async function AgentPage({ params }: AgentPageProps) {
             ))}
           </ul>
           {session?.user ? (
-            <StartUnpaidAccessForm
+            <StartRentalCheckoutForm
               slug={agent.slug}
               durations={durations.map((duration) => ({
                 id: duration.id,
@@ -101,7 +101,7 @@ export default async function AgentPage({ params }: AgentPageProps) {
               <Link className="underline underline-offset-4" href="/login">
                 Sign in
               </Link>{" "}
-              to start unpaid access (Stripe checkout is not implemented).
+              to pay with Stripe Checkout.
             </p>
           )}
         </section>

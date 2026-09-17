@@ -77,6 +77,17 @@ export const rentalStatusEnum = pgEnum("rental_status", [
   "refunded",
 ]);
 
+export const rentalPaymentKindEnum = pgEnum("rental_payment_kind", [
+  "purchase",
+  "renewal",
+]);
+
+export const rentalPaymentStatusEnum = pgEnum("rental_payment_status", [
+  "open",
+  "paid",
+  "canceled",
+]);
+
 export const agentSessionStatusEnum = pgEnum("agent_session_status", [
   "open",
   "closed",
@@ -364,6 +375,57 @@ export const rentals = pgTable(
   ],
 ).enableRLS();
 
+/**
+ * Stripe Checkout / PaymentIntent rows. Written by the billing path
+ * (`getDb()` / privileged) so webhooks can apply without a user JWT.
+ * No authenticated policies — FORCE RLS keeps end users out.
+ */
+export const rentalPayments = pgTable(
+  "rental_payments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    rentalId: uuid("rental_id")
+      .notNull()
+      .references(() => rentals.id, { onDelete: "cascade" }),
+    kind: rentalPaymentKindEnum("kind").notNull(),
+    status: rentalPaymentStatusEnum("status").notNull().default("open"),
+    durationId: text("duration_id").notNull(),
+    durationHours: integer("duration_hours").notNull(),
+    usageIncluded: integer("usage_included").notNull().default(0),
+    priceCents: integer("price_cents").notNull(),
+    currency: text("currency").notNull().default("USD"),
+    stripeSessionId: text("stripe_session_id"),
+    stripePaymentIntentId: text("stripe_payment_intent_id"),
+    appliedAt: timestamp("applied_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    unique("rental_payments_stripe_session_id_uidx").on(table.stripeSessionId),
+    unique("rental_payments_stripe_payment_intent_id_uidx").on(
+      table.stripePaymentIntentId,
+    ),
+    index("rental_payments_rental_id_idx").on(table.rentalId),
+    index("rental_payments_status_idx").on(table.status),
+  ],
+).enableRLS();
+
+/**
+ * Stripe event ids already processed. Unique primary key makes webhook
+ * delivery retries a no-op.
+ */
+export const stripeEvents = pgTable(
+  "stripe_events",
+  {
+    id: text("id").primaryKey(),
+    type: text("type").notNull(),
+    rentalId: uuid("rental_id").references(() => rentals.id, {
+      onDelete: "set null",
+    }),
+    ...timestamps,
+  },
+  (table) => [index("stripe_events_rental_id_idx").on(table.rentalId)],
+).enableRLS();
+
 export const agentSessions = pgTable(
   "agent_sessions",
   {
@@ -558,6 +620,21 @@ export const rentalsRelations = relations(rentals, ({ one, many }) => ({
     references: [agentProfiles.id],
   }),
   sessions: many(agentSessions),
+  payments: many(rentalPayments),
+}));
+
+export const rentalPaymentsRelations = relations(rentalPayments, ({ one }) => ({
+  rental: one(rentals, {
+    fields: [rentalPayments.rentalId],
+    references: [rentals.id],
+  }),
+}));
+
+export const stripeEventsRelations = relations(stripeEvents, ({ one }) => ({
+  rental: one(rentals, {
+    fields: [stripeEvents.rentalId],
+    references: [rentals.id],
+  }),
 }));
 
 export const agentSessionsRelations = relations(

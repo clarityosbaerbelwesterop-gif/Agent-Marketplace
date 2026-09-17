@@ -8,6 +8,7 @@ import {
 } from "@/lib/db/schema";
 import type { JsonObject } from "@/lib/db/json";
 import type { ChatUsage } from "@/lib/unorouter/types";
+import { rentalIsActive } from "./rentals";
 
 export async function getOrCreateOpenSession(input: {
   userId: string;
@@ -22,6 +23,13 @@ export async function getOrCreateOpenSession(input: {
       .limit(1);
     if (!rental) {
       return { ok: false as const, error: "Rental not found", status: 404 };
+    }
+    if (!rentalIsActive(rental)) {
+      return {
+        ok: false as const,
+        error: "Rental is not active or has expired",
+        status: 409,
+      };
     }
 
     if (input.sessionId) {
