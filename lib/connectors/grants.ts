@@ -9,7 +9,7 @@ import {
   encodeOauthState,
   oauthStateSecretConfigured,
 } from "./oauth";
-import { hasStoredCredentials, toApiStatus } from "./status";
+import { asSqlBoolean, hasStoredCredentials, toApiStatus } from "./status";
 import type {
   ConnectorId,
   PublicConnectorGrant,
@@ -40,9 +40,9 @@ export function toPublicGrant(row: {
     provider: row.provider,
     scopes: row.scopes,
     status: toApiStatus(row.status),
-    hasCredentials: Boolean(
-      row.hasCredentials ?? hasStoredCredentials(row.credentials ?? null),
-    ),
+    hasCredentials: asSqlBoolean(row.hasCredentials)
+      ? true
+      : hasStoredCredentials(row.credentials ?? null),
     metadata: asJsonObject(row.metadata),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

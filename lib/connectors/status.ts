@@ -16,6 +16,10 @@ export function isActiveGrant(status: string): boolean {
   return status === "granted";
 }
 
+export function asSqlBoolean(value: unknown): boolean {
+  return value === true || value === "t" || value === "true";
+}
+
 export function hasStoredCredentials(credentials: unknown): boolean {
   if (!credentials || typeof credentials !== "object" || Array.isArray(credentials)) {
     return false;
