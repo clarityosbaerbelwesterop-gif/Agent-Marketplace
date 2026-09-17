@@ -76,3 +76,11 @@ export function chatRentalHref(rentalId: string): string {
 export function chatSessionHref(sessionId: string): string {
   return `/chat?sessionId=${encodeURIComponent(sessionId)}`;
 }
+
+export function groupChatHref(rentalIds: string[] = []): string {
+  const unique = [...new Set(rentalIds.filter(Boolean))];
+  if (unique.length === 0) {
+    return "/chat/group";
+  }
+  return `/chat/group?rentalIds=${encodeURIComponent(unique.join(","))}`;
+}

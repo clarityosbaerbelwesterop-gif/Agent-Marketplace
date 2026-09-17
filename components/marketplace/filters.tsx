@@ -7,7 +7,7 @@ import {
   AGENT_CATEGORY_GROUPS,
   CATEGORY_GROUP_MEMBERS,
 } from "@/lib/catalog/groups";
-import { GROUP_LABELS, SORT_LABELS, TIER_LABELS } from "@/lib/labels";
+import { CATEGORY_LABELS, GROUP_LABELS, SORT_LABELS, TIER_LABELS } from "@/lib/labels";
 import type { ParsedAgentsQuery } from "@/lib/catalog/parse-query";
 
 export function MarketplaceFilters({
@@ -60,7 +60,7 @@ export function MarketplaceFilters({
           <option value="">Alle</option>
           {categories.map((category) => (
             <option key={category} value={category}>
-              {category}
+              {CATEGORY_LABELS[category]}
             </option>
           ))}
         </Select>

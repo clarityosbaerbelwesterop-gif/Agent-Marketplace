@@ -1,6 +1,13 @@
 import { AgentMark } from "@/components/agent/agent-mark";
 import { Badge } from "@/components/ui/badge";
-import { GROUP_LABELS, AVAILABILITY_LABELS, TIER_LABELS } from "@/lib/labels";
+import {
+  AGENT_TYPE_LABELS,
+  AVAILABILITY_LABELS,
+  CATEGORY_LABELS,
+  FAMILY_LABELS,
+  TIER_LABELS,
+} from "@/lib/labels";
+import { agentTypeForCategory } from "@/lib/catalog/agent-types";
 import {
   agentInitials,
   agentPalette,
@@ -9,23 +16,30 @@ import {
 import type { AgentListItem } from "@/lib/catalog/types";
 
 export function AgentMetaBadges({ agent }: { agent: AgentListItem }) {
+  const agentType =
+    agent.categoryGroup ?? agentTypeForCategory(agent.category);
+  const category =
+    CATEGORY_LABELS[agent.category as keyof typeof CATEGORY_LABELS] ?? agent.category;
+
   return (
     <ul className="flex flex-wrap gap-2" aria-label="Merkmale">
-      {agent.categoryGroup ? (
+      {agentType ? (
         <li>
-          <Badge tone="outline">{GROUP_LABELS[agent.categoryGroup]}</Badge>
+          <Badge tone="accent">{AGENT_TYPE_LABELS[agentType]}</Badge>
         </li>
       ) : null}
       <li>
-        <Badge tone="outline">{agent.category}</Badge>
+        <Badge tone="outline">{category}</Badge>
       </li>
-      {agent.family ? (
+      {agent.family && agent.family !== agentType ? (
         <li>
-          <Badge tone="outline">{agent.family}</Badge>
+          <Badge tone="outline">
+            {FAMILY_LABELS[agent.family as keyof typeof FAMILY_LABELS] ?? agent.family}
+          </Badge>
         </li>
       ) : null}
       <li>
-        <Badge tone="accent">{TIER_LABELS[agent.tier]}</Badge>
+        <Badge tone={agentType ? "muted" : "accent"}>{TIER_LABELS[agent.tier]}</Badge>
       </li>
       <li>
         <Badge>{AVAILABILITY_LABELS[agent.availability]}</Badge>

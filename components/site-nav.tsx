@@ -9,6 +9,7 @@ const links = [
   { href: "/marketplace", label: "Marktplatz" },
   { href: "/compare", label: "Vergleich" },
   { href: "/chat", label: "Chat" },
+  { href: "/chat/group", label: "Gruppenchat" },
   { href: "/rooms", label: "Räume" },
   { href: "/connectors", label: "Konnektoren" },
   { href: "/connectors/discover", label: "Entdecken" },
@@ -44,9 +45,11 @@ export function SiteNav({ signedIn = false }: SiteNavProps) {
       >
         {links.map(({ href, label }) => {
           const isActive =
-            href === "/connectors"
-              ? pathname === "/connectors"
-              : pathname === href || pathname.startsWith(`${href}/`);
+            href === "/chat"
+              ? pathname === "/chat"
+              : href === "/connectors"
+                ? pathname === "/connectors"
+                : pathname === href || pathname.startsWith(`${href}/`);
 
           return (
             <li key={href}>

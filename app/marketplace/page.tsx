@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { AgentCard } from "@/components/marketplace/agent-card";
 import { CompareBar } from "@/components/marketplace/compare-bar";
 import { MarketplaceFilters } from "@/components/marketplace/filters";
+import { MarketplaceTypeFilters } from "@/components/marketplace/type-filters";
 import { Pagination } from "@/components/marketplace/pagination";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ButtonLink } from "@/components/ui/button-link";
@@ -49,6 +50,7 @@ export default async function MarketplacePage({
         title="Agenten mieten"
         description="Der Katalog liegt in Postgres. DATABASE_URL fehlt auf diesem Server."
       >
+        <MarketplaceTypeFilters query={parsed} compare={compare} />
         <EmptyState
           title="Katalog nicht verbunden"
           description="Ohne Datenbank wird die 10k-Seed-Liste nicht geladen. Es gibt keinen stillen Fallback auf UI-Fixtures."
@@ -71,13 +73,14 @@ export default async function MarketplacePage({
       width="wide"
       eyebrow="Marktplatz"
       title="Agenten mieten"
-      description="Suche, Gruppen (Coding, Marketing, Design, Sales), Filter und Sortierung laufen serverseitig über die Catalog API. Eine Seite, nicht der ganze Bestand."
+      description="Suche, Typen (Coding, Marketing, Design, Sales) und Filter laufen serverseitig über die Catalog API. Eine Seite, nicht der ganze Bestand."
       actions={
         <ButtonLink href="/compare" variant="secondary">
           Vergleich
         </ButtonLink>
       }
     >
+      <MarketplaceTypeFilters query={parsed} compare={compare} />
       <MarketplaceFilters query={parsed} compare={compare} />
 
       <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted">
@@ -100,7 +103,7 @@ export default async function MarketplacePage({
       {result.items.length === 0 ? (
         <EmptyState
           title="Nichts gefunden"
-          description="Passen Sie Suche, Gruppe, Kategorie oder Stufe an. Der Bestand kommt aus Postgres, nicht aus Fixtures."
+          description="Passen Sie Suche, Typ, Kategorie oder Stufe an. Der Bestand kommt aus Postgres, nicht aus Fixtures."
           actionHref="/marketplace"
           actionLabel="Alle Profile"
         />

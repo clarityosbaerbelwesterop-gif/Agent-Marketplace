@@ -7,6 +7,7 @@ const groups = [
       { href: "/marketplace", label: "Marktplatz" },
       { href: "/compare", label: "Vergleich" },
       { href: "/chat", label: "Chat" },
+      { href: "/chat/group", label: "Gruppenchat" },
       { href: "/connectors", label: "Konnektoren" },
       { href: "/connectors/discover", label: "Entdecken" },
     ],

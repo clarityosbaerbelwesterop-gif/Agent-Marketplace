@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { ConnectorDiscoverSearch } from "@/components/connector-discover-search";
+import { UpcomingConnectorPanel } from "@/components/connectors/upcoming-panel";
 import { ButtonLink } from "@/components/ui/button-link";
 import { PageShell } from "@/components/page-shell";
 import { DISCOVERY_SOURCES } from "@/lib/connectors/discovery";
+import { UPCOMING_CONNECTOR_LIST } from "@/lib/connectors";
 
 export const metadata: Metadata = {
   title: "MCP entdecken",
@@ -15,7 +17,7 @@ export default function ConnectorDiscoverPage() {
     <PageShell
       eyebrow="Konnektoren"
       title="MCP entdecken"
-      description="Nur Katalogsuche. Runtime-Konnektoren bleiben die First-Wave-Registry inklusive Higgsfield, LinkedIn, Meta und Google Search (Stubs, kein Fake-OAuth). Nichts hier ist grantable."
+      description="Nur Katalogsuche. Runtime-Konnektoren bleiben die First-Party-Registry inklusive Higgsfield, LinkedIn, Meta und Google Search (Stubs, kein Fake-OAuth). Nichts hier ist grantable."
       actions={
         <ButtonLink href="/connectors" variant="secondary">
           Grants
@@ -38,6 +40,7 @@ export default function ConnectorDiscoverPage() {
         ))}
       </ul>
       <ConnectorDiscoverSearch />
+      <UpcomingConnectorPanel items={UPCOMING_CONNECTOR_LIST} />
     </PageShell>
   );
 }

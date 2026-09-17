@@ -3,7 +3,7 @@ import { CONNECTOR_LIST, connectorCatalog } from "@/lib/connectors";
 
 export const dynamic = "force-dynamic";
 
-/** Public first-wave connector catalog. OAuth is not implied. */
+/** Public first-party connector catalog. OAuth is not implied. */
 export async function GET() {
   return NextResponse.json({
     oauth: "not_wired_by_default",
@@ -15,6 +15,7 @@ export async function GET() {
       requiredScopes: item.requiredScopes,
       capabilityTags: item.capabilityTags,
       oauthConfigured: item.oauthConfigured,
+      grantable: true,
     })),
     ids: CONNECTOR_LIST.map((row) => row.id),
   });

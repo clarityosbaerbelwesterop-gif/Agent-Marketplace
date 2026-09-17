@@ -11,6 +11,12 @@ export {
   categoriesForFamily,
   isAgentFamily,
 } from "./family";
+export {
+  AGENT_TYPES,
+  AGENT_TYPE_LABELS,
+  agentTypeForCategory,
+  isDesignCategory,
+} from "./agent-types";
 export { parseAgentsQuery } from "./parse-query";
 export { compareAgents, parseCompareSlugs } from "./compare";
 export { getAgentBySlug, isDatabaseConfigured, listAgents } from "./queries";

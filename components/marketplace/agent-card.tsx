@@ -6,8 +6,11 @@ import { MAX_COMPARE_SLUGS } from "@/lib/catalog/constants";
 import { marketplaceHref, toggleCompare } from "@/lib/urls";
 import type { ParsedAgentsQuery } from "@/lib/catalog/parse-query";
 import type { AgentListItem } from "@/lib/catalog/types";
+import { isDesignCategory } from "@/lib/catalog/agent-types";
 import { isUntested, pickDuration } from "@/lib/ui/agent-presentation";
+import { cn } from "@/lib/utils";
 import Link from "next/link";
+import type { CSSProperties } from "react";
 
 export function AgentCard({
   agent,
@@ -23,14 +26,33 @@ export function AgentCard({
   const nextCompare = toggleCompare(compare, agent.slug);
   const compareHref = marketplaceHref({ ...query, compare: nextCompare });
   const duration = pickDuration(agent);
+  const design = isDesignCategory(agent.category);
 
   return (
-    <article className="flex h-full flex-col gap-4 rounded-[var(--radius-lg)] border border-border bg-surface-raised p-5 shadow-card">
+    <article
+      className={cn(
+        "flex h-full flex-col gap-4 rounded-[var(--radius-lg)] border border-border bg-surface-raised p-5 shadow-card",
+        design && "agent-card-design",
+      )}
+      style={
+        design && agent.accentColor
+          ? ({ "--card-accent": agent.accentColor } as CSSProperties)
+          : undefined
+      }
+    >
+      {design ? (
+        <p className="text-xs uppercase tracking-[0.18em] text-muted">Atelier</p>
+      ) : null}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <AgentIdentityMark agent={agent} />
           <div className="flex flex-col gap-1">
-            <h2 className="font-display text-2xl leading-none tracking-tight">
+            <h2
+              className={cn(
+                "font-display tracking-tight",
+                design ? "text-3xl leading-none" : "text-2xl leading-none",
+              )}
+            >
               <Link href={`/agents/${agent.slug}`} className="hover:underline">
                 {agent.name}
               </Link>
@@ -41,7 +63,12 @@ export function AgentCard({
         {isUntested(agent) ? <Badge tone="warning">Ungeprüft</Badge> : null}
       </div>
 
-      <p className="line-clamp-3 text-sm leading-relaxed text-muted">
+      <p
+        className={cn(
+          "text-sm leading-relaxed text-muted",
+          design ? "line-clamp-4 font-display italic" : "line-clamp-3",
+        )}
+      >
         {agent.tagline ?? agent.description}
       </p>
 
@@ -69,7 +96,7 @@ export function AgentCard({
             href={`/agents/${agent.slug}`}
             className="font-medium underline-offset-4 hover:underline"
           >
-            Profil
+            {design ? "Portfolio" : "Profil"}
           </Link>
         </div>
       </div>

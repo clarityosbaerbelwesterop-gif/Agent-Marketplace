@@ -16,7 +16,8 @@ const steps = [
   { n: "05", title: "Preis prüfen", text: "Inklusivkontingent liegt offen." },
   { n: "06", title: "Checkout", text: "Stripe Checkout; Aktivierung nur per Webhook." },
   { n: "07", title: "Chathub", text: "Aktive Miete streamt über UNOROUTER, FreeLLM als Failover." },
-  { n: "08", title: "Tools", text: "First-Wave-Grants unter /connectors inkl. Stubs; OAuth wo konfiguriert." },
+  { n: "08", title: "Gruppenchat", text: "Mehrere bezahlte Mieten im überlappenden Fenster." },
+  { n: "09", title: "Tools", text: "First-Wave-Grants unter /connectors inkl. Stubs; OAuth wo konfiguriert." },
 ] as const;
 
 export default function HomePage() {
@@ -32,8 +33,8 @@ export default function HomePage() {
           </h1>
           <p className="max-w-xl text-lg leading-relaxed text-muted">
             Paginierten Katalog durchsuchen, Mietdauer prüfen, mit Stripe
-            bezahlen und chatten. Die Erfolgs-URL allein aktiviert keine Miete.
-            Keine erfundenen Nutzerzahlen.
+            bezahlen und chatten. Coding, Marketing, Design und Sales sind
+            klar gekennzeichnet. Die Erfolgs-URL allein aktiviert keine Miete.
           </p>
           <div className="flex flex-wrap gap-3">
             <ButtonLink href="/marketplace" size="lg">
@@ -86,6 +87,10 @@ export default function HomePage() {
         ,{" "}
         <Link href="/chat" className="underline underline-offset-4">
           Chat
+        </Link>
+        ,{" "}
+        <Link href="/chat/group" className="underline underline-offset-4">
+          Gruppenchat
         </Link>
         .
       </p>

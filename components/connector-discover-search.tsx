@@ -23,11 +23,11 @@ export function ConnectorDiscoverSearch() {
         error?: string;
       };
       if (!response.ok) {
-        throw new Error(payload.error || "Discovery failed");
+        throw new Error(payload.error || "Suche fehlgeschlagen");
       }
       setResult(payload);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Discovery failed");
+      setError(err instanceof Error ? err.message : "Suche fehlgeschlagen");
     } finally {
       setBusy(false);
     }
@@ -37,9 +37,9 @@ export function ConnectorDiscoverSearch() {
     <div className="flex flex-col gap-4">
       <form className="flex flex-wrap items-end gap-3" onSubmit={onSubmit}>
         <label className="text-sm">
-          Search MCP catalogs
+          MCP-Kataloge durchsuchen
           <input
-            className="mt-1 w-full min-w-64 rounded-md border border-border bg-background px-3 py-2 text-sm"
+            className="mt-1 w-full min-w-64 rounded-md border border-border bg-surface-raised px-3 py-2 text-sm"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="github, filesystem, slack…"
@@ -50,11 +50,11 @@ export function ConnectorDiscoverSearch() {
           type="submit"
           disabled={busy}
         >
-          {busy ? "Searching…" : "Search"}
+          {busy ? "Suche…" : "Suchen"}
         </button>
       </form>
       {error ? (
-        <p className="text-sm text-red-700" role="alert">
+        <p className="text-sm text-danger" role="alert">
           {error}
         </p>
       ) : null}
@@ -71,7 +71,7 @@ export function ConnectorDiscoverSearch() {
             </ul>
           ) : null}
           {result.items.length === 0 ? (
-            <p className="text-sm text-muted">No catalog matches.</p>
+            <p className="text-sm text-muted">Keine Katalogtreffer.</p>
           ) : (
             <ul className="flex flex-col divide-y divide-border border-y border-border">
               {result.items.map((item) => (
@@ -92,13 +92,13 @@ export function ConnectorDiscoverSearch() {
                         </a>
                       </>
                     ) : (
-                      " · no public repo URL"
+                      " · keine öffentliche Repo-URL"
                     )}
                   </p>
                   {item.description ? (
                     <p className="mt-1 text-muted">{item.description}</p>
                   ) : null}
-                  <p className="mt-1 text-xs text-muted">Not grantable · untrusted catalog row</p>
+                  <p className="mt-1 text-xs text-muted">Nicht grantable · untrusted Katalogzeile</p>
                 </li>
               ))}
             </ul>
