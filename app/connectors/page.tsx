@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { ConnectorPanel } from "@/components/connector-panel";
+import { UpcomingConnectorPanel } from "@/components/connectors/upcoming-panel";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ButtonLink } from "@/components/ui/button-link";
 import { PageShell } from "@/components/page-shell";
 import { getVerifiedSession } from "@/lib/auth/server";
 import { isDatabaseConfigured } from "@/lib/catalog/queries";
-import { connectorCatalog, listConnectorGrants } from "@/lib/connectors";
+import { connectorCatalog, listConnectorGrants, UPCOMING_CONNECTOR_LIST } from "@/lib/connectors";
 import {
   getRentalForUser,
   listRentals,
@@ -121,6 +122,7 @@ export default async function ConnectorsPage({
             </ul>
           </div>
         ) : null}
+        <UpcomingConnectorPanel items={UPCOMING_CONNECTOR_LIST} />
       </PageShell>
     );
   }
@@ -185,6 +187,7 @@ export default async function ConnectorsPage({
           await listConnectorGrants(session.user.id, bundle.rental.workspaceId),
         )}
       />
+      <UpcomingConnectorPanel items={UPCOMING_CONNECTOR_LIST} />
     </PageShell>
   );
 }

@@ -13,6 +13,7 @@ import {
   categoriesForGroup,
   type AgentCategoryGroup,
 } from "./groups";
+import { isAgentType } from "./agent-types";
 
 export type ParsedAgentsQuery = {
   search: string | null;
@@ -68,9 +69,17 @@ export function parseAgentsQuery(
   const search = searchRaw ? sanitizeSearch(searchRaw) : null;
 
   const groupRaw = get("group")?.trim() || null;
+  const typeRaw = get("type")?.trim() || null;
   if (groupRaw && !isAgentCategoryGroup(groupRaw)) {
     return { error: `Unknown group: ${groupRaw}`, status: 400 };
   }
+  if (typeRaw && !isAgentType(typeRaw)) {
+    return { error: `Unknown type: ${typeRaw}`, status: 400 };
+  }
+  if (groupRaw && typeRaw && groupRaw !== typeRaw) {
+    return { error: "group and type must match when both are set", status: 400 };
+  }
+  const groupOrType = groupRaw ?? typeRaw;
 
   const familyRaw = get("family")?.trim() || null;
   if (familyRaw && !AGENT_FAMILY_SET.has(familyRaw)) {
@@ -92,9 +101,9 @@ export function parseAgentsQuery(
   const family =
     (familyRaw as AgentFamily | null) ??
     familyFromAlias ??
-    (groupRaw as AgentFamily | null);
+    (groupOrType as AgentFamily | null);
   const group =
-    (groupRaw as AgentCategoryGroup | null) ??
+    (groupOrType as AgentCategoryGroup | null) ??
     (family && isAgentCategoryGroup(family) ? family : null) ??
     (familyFromAlias && isAgentCategoryGroup(familyFromAlias)
       ? familyFromAlias

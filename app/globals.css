@@ -123,6 +123,25 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+@keyframes working-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.working-pulse {
+  animation: working-pulse 1.2s ease-in-out infinite;
+}
+
+.agent-card-design {
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--card-accent, var(--accent)) 12%, var(--surface-raised)), var(--surface-raised));
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

@@ -5,6 +5,7 @@ import { formatMoney } from "@/lib/format";
 import { TIER_LABELS } from "@/lib/labels";
 import { checkoutHref } from "@/lib/urls";
 import { formatUsage, isUntested, pickDuration } from "@/lib/ui/agent-presentation";
+import { AGENT_TYPE_LABELS, agentTypeForCategory } from "@/lib/catalog/agent-types";
 import type { AgentCompareItem } from "@/lib/catalog/types";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -79,6 +80,16 @@ export function CompareTable({
                 {agent.modelAlias ?? agent.tier}
               </td>
             ))}
+          </Row>
+          <Row label="Typ">
+            {agents.map((agent) => {
+              const type = agentTypeForCategory(agent.category);
+              return (
+                <td key={agent.slug} className="p-4">
+                  {type ? AGENT_TYPE_LABELS[type] : "—"}
+                </td>
+              );
+            })}
           </Row>
           <Row label="Kategorie">
             {agents.map((agent) => (

@@ -1,5 +1,26 @@
 import type { AgentAvailability, AgentRatingStatus, AgentTier } from "@/lib/catalog/enums";
+import type { AgentCategory } from "@/lib/catalog/constants";
 import type { AgentCategoryGroup } from "@/lib/catalog/groups";
+import { AGENT_TYPE_LABELS } from "@/lib/catalog/agent-types";
+
+export { AGENT_TYPE_LABELS };
+
+export const CATEGORY_LABELS: Record<AgentCategory, string> = {
+  software: "Software",
+  frontend: "Frontend",
+  backend: "Backend",
+  databases: "Datenbanken",
+  devops: "DevOps",
+  QA: "QA",
+  security: "Security",
+  "data analysis": "Datenanalyse",
+  research: "Research",
+  writing: "Writing",
+  design: "Design",
+  marketing: "Marketing",
+  sales: "Sales",
+  "project management": "Projektmanagement",
+};
 
 export const TIER_LABELS: Record<AgentTier, string> = {
   standard: "Standard",
@@ -44,3 +65,7 @@ export const GROUP_LABELS: Record<AgentCategoryGroup, string> = {
   design: "Design",
   sales: "Sales",
 };
+
+export function categoryLabel(category: string): string {
+  return CATEGORY_LABELS[category as AgentCategory] ?? category;
+}

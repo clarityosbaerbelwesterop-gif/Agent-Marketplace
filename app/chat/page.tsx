@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PageShell } from "@/components/page-shell";
 import { ButtonLink } from "@/components/ui/button-link";
 import { getVerifiedSession } from "@/lib/auth/server";
+import { agentTypeForCategory } from "@/lib/catalog/agent-types";
 import { isDatabaseConfigured } from "@/lib/catalog/queries";
 import {
   getRentalForUser,
@@ -16,13 +17,17 @@ import {
 } from "@/lib/runtime/rentals";
 import { getOrCreateOpenSession, listSessionRuns } from "@/lib/runtime/runs";
 import { getSessionForUser, listGroupMembers } from "@/lib/runtime/rooms";
-import { chatRentalHref, rentalCheckoutHref } from "@/lib/urls";
+import {
+  getFailoverPresentation,
+  getMemoryNetworkPresentation,
+} from "@/lib/runtime/status";
+import { chatRentalHref, groupChatHref, rentalCheckoutHref } from "@/lib/urls";
 import { firstSearchParam } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Chat",
   description:
-    "Chathub für eine bezahlte Miete. UNOROUTER streamt, sobald ein Key gesetzt ist; FreeLLM ist Failover.",
+    "Chathub für eine bezahlte Miete. UNOROUTER streamt, sobald ein Key gesetzt ist; FreeLLM ist Failover. Gruppenchat bei mehreren aktiven Mieten.",
 };
 
 export const dynamic = "force-dynamic";
@@ -34,6 +39,8 @@ export default async function ChatPage({
   const rentalId = firstSearchParam(params.rentalId);
   const sessionIdParam = firstSearchParam(params.sessionId);
   const session = await getVerifiedSession();
+  const failover = getFailoverPresentation();
+  const memoryNetwork = getMemoryNetworkPresentation();
 
   if (!session?.user) {
     return (
@@ -69,10 +76,20 @@ export default async function ChatPage({
         endsAt: row.endsAt ? new Date(row.endsAt) : null,
       }),
     );
+    const groupCandidates = active.filter((row) =>
+      Boolean(agentTypeForCategory(row.agentCategory ?? "")),
+    );
     return (
       <PageShell
         title="Chat"
         description="Wählen Sie eine aktive, per Webhook bestätigte Miete — oder starten Sie eine Gruppensitzung mit mehreren bezahlten Mietfenstern. Ausstehend, storniert und abgelaufen werden abgelehnt."
+        actions={
+          groupCandidates.length >= 2 ? (
+            <ButtonLink href={groupChatHref()} variant="secondary">
+              Gruppenchat
+            </ButtonLink>
+          ) : undefined
+        }
       >
         {active.length === 0 ? (
           <EmptyState
@@ -93,6 +110,14 @@ export default async function ChatPage({
             ))}
           </ul>
         )}
+        {groupCandidates.length >= 2 ? (
+          <p className="text-sm text-muted">
+            Mehrere Coding-/Marketing-/Design-/Sales-Mieten sind aktiv.{" "}
+            <ButtonLink href={groupChatHref()} variant="ghost" size="sm">
+              Gruppenchat starten
+            </ButtonLink>
+          </p>
+        ) : null}
         <GroupChatStart
           rentals={active.map((row) => ({
             id: row.id,
@@ -175,9 +200,12 @@ export default async function ChatPage({
           rentalId={null}
           sessionId={groupSession.id}
           agentName={activeMembers.map((member) => member.agentName).join(", ")}
+          failover={failover}
+          memoryNetwork={memoryNetwork}
           groupMembers={activeMembers.map((member) => ({
             rentalId: member.rentalId,
             agentName: member.agentName,
+            agentSlug: member.agentSlug,
           }))}
           initialRuns={runs.map((run) => ({
             id: run.id,
@@ -279,6 +307,16 @@ export default async function ChatPage({
 
   const runs = await listSessionRuns(session.user.id, opened.data.session.id);
   const durations = bundle.agent.rentalOptions.durations ?? [];
+  const allRentals = await listRentals(session.user.id);
+  const groupEligible =
+    allRentals.filter(
+      (row) =>
+        rentalIsActive({
+          status: row.status,
+          startsAt: row.startsAt ? new Date(row.startsAt) : null,
+          endsAt: row.endsAt ? new Date(row.endsAt) : null,
+        }) && Boolean(agentTypeForCategory(row.agentCategory ?? "")),
+    ).length >= 2;
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-10 sm:px-6">
@@ -296,6 +334,10 @@ export default async function ChatPage({
         rentalId={rentalId}
         sessionId={opened.data.session.id}
         agentName={bundle.agent.name}
+        agentSlug={bundle.agent.slug}
+        failover={failover}
+        memoryNetwork={memoryNetwork}
+        groupEligible={groupEligible}
         initialRuns={runs.map((run) => ({
           id: run.id,
           status: run.status,

@@ -92,6 +92,8 @@ export function serializeRental(
     agentSlug?: string;
     agentName?: string;
     agentTier?: string;
+    agentCategory?: string;
+    agentAccentColor?: string | null;
     checkoutUrl?: string | null;
     stripeSessionId?: string | null;
     billing?: RentalBilling;
@@ -126,6 +128,8 @@ export function serializeRental(
     agentSlug: extra.agentSlug,
     agentName: extra.agentName,
     agentTier: extra.agentTier,
+    agentCategory: extra.agentCategory,
+    agentAccentColor: extra.agentAccentColor,
     checkoutUrl: extra.checkoutUrl,
     notice: extra.notice,
   };
@@ -139,6 +143,8 @@ export async function listRentals(userId: string) {
         agentSlug: agentProfiles.slug,
         agentName: agentProfiles.name,
         agentTier: agentProfiles.tier,
+        agentCategory: agentProfiles.category,
+        agentAccentColor: agentProfiles.accentColor,
       })
       .from(rentals)
       .innerJoin(agentProfiles, eq(rentals.agentProfileId, agentProfiles.id))
@@ -150,6 +156,8 @@ export async function listRentals(userId: string) {
         agentSlug: row.agentSlug,
         agentName: row.agentName,
         agentTier: row.agentTier,
+        agentCategory: row.agentCategory,
+        agentAccentColor: row.agentAccentColor,
       }),
     );
   });

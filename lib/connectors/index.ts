@@ -14,9 +14,19 @@ export {
   executeConnectorTool,
   isConnectorToolName,
 } from "./tools";
+export {
+  UPCOMING_CONNECTOR_IDS,
+  UPCOMING_CONNECTOR_LIST,
+  getUpcomingConnector,
+  isUpcomingConnectorId,
+} from "./upcoming";
 export type {
   ConnectorCatalogItem,
   ConnectorDefinition,
   ConnectorId,
   PublicConnectorGrant,
 } from "./types";
+export type {
+  UpcomingConnectorDefinition,
+  UpcomingConnectorId,
+} from "./upcoming";
