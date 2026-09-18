@@ -10,8 +10,8 @@ import {
   encodeOauthState,
   oauthStateSecretConfigured,
 } from "./oauth";
-import { sanitizePublicMetadata } from "./secrets";
-import { asSqlBoolean, hasStoredCredentials, toApiStatus } from "./status";
+import { toPublicGrant } from "./public-grant";
+import { hasStoredCredentials } from "./status";
 import { CONNECTOR_IDS, type ConnectorId, type PublicConnectorGrant } from "./types";
 
 function connectorDefinitionFromInput(provider: string) {
@@ -26,39 +26,6 @@ function asJsonObject(value: unknown): JsonObject {
     return value as JsonObject;
   }
   return {};
-}
-
-function toIso(value: Date | string): string {
-  return value instanceof Date ? value.toISOString() : value;
-}
-
-/**
- * Public grant JSON. Never copies credentials, tokens, apiKeys, or secret metadata.
- * `hasCredentials` is a boolean only — callers must not round-trip the blob.
- */
-export function toPublicGrant(row: {
-  id: string;
-  provider: string;
-  scopes: string[];
-  status: string;
-  metadata: unknown;
-  credentials?: unknown;
-  createdAt: Date | string;
-  updatedAt: Date | string;
-  hasCredentials?: boolean;
-}): PublicConnectorGrant {
-  return {
-    id: row.id,
-    provider: row.provider,
-    scopes: [...row.scopes],
-    status: toApiStatus(row.status),
-    hasCredentials: asSqlBoolean(row.hasCredentials)
-      ? true
-      : hasStoredCredentials(row.credentials ?? null),
-    metadata: sanitizePublicMetadata(row.metadata),
-    createdAt: toIso(row.createdAt),
-    updatedAt: toIso(row.updatedAt),
-  };
 }
 
 /** Pending stub inserted on rental activation. Never granted. Never has tokens. */
