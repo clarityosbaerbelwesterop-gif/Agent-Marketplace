@@ -330,11 +330,13 @@ Webhook writes use `getDb()` (privileged). `rental_payments` and `stripe_events`
 
 Do this once on the production Neon branch and the linked Vercel project before taking paid traffic. Secrets stay in Vercel / Stripe / Neon — never commit them. Success redirects must not activate rentals.
 
-### 1. Vercel project link
+### 1. Vercel project (production via GitHub Actions)
 
-- [ ] Create or open the Vercel project and link this GitHub repo (`main` → Production).
-- [ ] Set `NEXT_PUBLIC_APP_URL` to the production origin (`https://<domain>`, no trailing slash). `VERCEL_URL` is only a fallback for preview.
-- [ ] Confirm Production env vars are set for **all** of the groups below (not Preview-only).
+- [ ] Production deploys from `main` through `.github/workflows/deploy-vercel.yml` (`secrets.VERCEL_TOKEN`). Do not connect Git auto-deploy; `vercel.json` `ignoreCommand` skips Git-triggered Vercel builds.
+- [ ] Keep the existing Neon webpreview URL as the **preview** host. Do not add Vercel preview deploys or new paid AWS infra.
+- [ ] GitHub Actions secrets: `VERCEL_TOKEN` (required). After the first project create, add `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` (from the workflow summary / `.vercel/project.json`).
+- [ ] Set `NEXT_PUBLIC_APP_URL` on the **Vercel production** env to the production origin (`https://<domain>`, no trailing slash). `VERCEL_URL` is only a fallback.
+- [ ] Confirm Production env vars are set for **all** of the groups below (Vercel project env, not GitHub Actions). Leave `MARKETPLACE_ALLOW_UNPAID_ACCESS` **unset** on Vercel production (unpaid stays on Neon preview).
 
 ### 2. Required environment variables
 
