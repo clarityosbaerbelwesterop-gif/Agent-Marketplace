@@ -33,6 +33,29 @@ npm run dev
 
 Keep the lockfile in sync with one package manager. Prefer **pnpm**.
 
+## Hosting
+
+| Target | Host | How it deploys |
+| --- | --- | --- |
+| **Production** | Vercel | Push to `main` runs `.github/workflows/deploy-vercel.yml` (`VERCEL_TOKEN`). |
+| **Preview** | Neon webpreview | Existing URL: `https://br-young-term-b1v4ry1z-webpreview.compute.c-5.eu-central-1.aws.neon.tech/` |
+
+Git-triggered Vercel builds are skipped (`vercel.json` `ignoreCommand`) so pull requests do not get a second preview host. `MARKETPLACE_ALLOW_UNPAID_ACCESS` stays **unset** on Vercel production; unpaid test rentals stay on Neon preview.
+
+### GitHub Actions secrets (deploy)
+
+| Secret | Required | Notes |
+| --- | --- | --- |
+| `VERCEL_TOKEN` | yes | Vercel CLI token |
+| `VERCEL_ORG_ID` | recommended | From the first ensure-project job / `.vercel/project.json` `orgId` |
+| `VERCEL_PROJECT_ID` | recommended | From the first ensure-project job / `.vercel/project.json` `projectId` |
+| `UNOROUTER_API_KEY` | runtime | Synced onto Vercel **production** env on deploy (not invented) |
+| `NEON_API_KEY` | no (platform) | Tenant connector secret; not a Vercel production app env |
+
+`VERCEL_ORG_ID` / `VERCEL_PROJECT_ID` are identifiers, not credentials. The workflow can create or reuse the `agent-marketplace` Vercel project with `VERCEL_TOKEN` alone, then prints the ids to add.
+
+App runtime names live on the **Vercel project** (Production scope). Copy names from `.env.example`. Do not set `MARKETPLACE_ALLOW_UNPAID_ACCESS` there.
+
 ## Scripts
 
 | Command | Description |

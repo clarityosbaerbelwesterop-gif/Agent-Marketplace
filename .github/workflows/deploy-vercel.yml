@@ -1,0 +1,119 @@
+# Production host: Vercel (push to main).
+# Preview host: existing Neon webpreview — this workflow does not deploy previews
+# and vercel.json skips Git-triggered Vercel builds so PRs stay on Neon.
+name: Deploy production to Vercel
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/deploy-vercel.yml"
+      - ".github/scripts/ensure-vercel-project.mjs"
+      - "vercel.json"
+
+concurrency:
+  group: vercel-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+  deployments: write
+
+env:
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+  VERCEL_PROJECT_NAME: agent-marketplace
+  # Must remain empty on Vercel production. Unpaid access stays on Neon preview.
+  MARKETPLACE_ALLOW_UNPAID_ACCESS: ""
+  VERCEL_TELEMETRY_DISABLED: "1"
+
+jobs:
+  ensure:
+    name: Ensure Vercel project
+    runs-on: ubuntu-latest
+    outputs:
+      org_id: ${{ steps.project.outputs.org_id }}
+      project_id: ${{ steps.project.outputs.project_id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Ensure Vercel project
+        id: project
+        run: node .github/scripts/ensure-vercel-project.mjs
+
+  deploy:
+    name: Deploy production
+    needs: ensure
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59.23.1
+
+      - name: Link project ids
+        env:
+          VERCEL_ORG_ID: ${{ needs.ensure.outputs.org_id }}
+          VERCEL_PROJECT_ID: ${{ needs.ensure.outputs.project_id }}
+        run: node .github/scripts/ensure-vercel-project.mjs
+
+      - name: Sync UNOROUTER_API_KEY to Vercel production
+        env:
+          UNOROUTER_API_KEY: ${{ secrets.UNOROUTER_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${UNOROUTER_API_KEY:-}" ]; then
+            echo "GitHub secret UNOROUTER_API_KEY is empty; not writing a placeholder to Vercel."
+            exit 0
+          fi
+          printf '%s' "$UNOROUTER_API_KEY" | vercel env add UNOROUTER_API_KEY production --yes --force --sensitive
+          echo "Synced UNOROUTER_API_KEY to Vercel production (value not printed)."
+
+      - name: Pull Vercel production env
+        run: vercel pull --yes --environment=production
+
+      - name: Refuse unpaid access on production
+        run: |
+          set -euo pipefail
+          env_file=".vercel/.env.production.local"
+          if [ -f "$env_file" ] && grep -E '^MARKETPLACE_ALLOW_UNPAID_ACCESS[[:space:]]*=[[:space:]]*(1|true|TRUE|True)[[:space:]]*$' "$env_file"; then
+            echo "MARKETPLACE_ALLOW_UNPAID_ACCESS is set on Vercel production."
+            echo "Unset it there. Unpaid test rentals stay on Neon webpreview only."
+            exit 1
+          fi
+          echo "Production unpaid flag is unset (required)."
+
+      - name: Build
+        run: vercel build --prod --yes
+
+      - name: Deploy production
+        id: deploy
+        run: |
+          set -euo pipefail
+          url="$(vercel deploy --prebuilt --prod --yes)"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Production deployment"
+            echo
+            echo "- URL: $url"
+            echo "- Target: production"
+            echo "- Preview remains Neon webpreview (not this job)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Deployed $url"
