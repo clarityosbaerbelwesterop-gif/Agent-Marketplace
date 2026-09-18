@@ -3,10 +3,8 @@
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import {
-  partitionConnectorCatalog,
-  type ConnectorCatalogItem,
-} from "@/lib/connectors";
+import { partitionConnectorCatalog } from "@/lib/connectors/serialize";
+import type { ConnectorCatalogItem } from "@/lib/connectors/types";
 import { connectorUiDescription, connectorUiName } from "@/lib/labels";
 
 function statusLabel(item: ConnectorCatalogItem): string {

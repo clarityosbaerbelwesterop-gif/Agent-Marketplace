@@ -1,6 +1,7 @@
 export { CONNECTOR_IDS, CONNECTOR_LIST, CONNECTOR_REGISTRY, FIRST_WAVE_CONNECTOR_IDS, SECOND_WAVE_CONNECTOR_IDS, getConnector, isConnectorId, isFirstWaveConnectorId, oauthEnvConfigured } from "./registry";
 export { canonicalConnectorId } from "./aliases";
 export { connectorCatalog, mergeAgentAndSupportedConnectors, partitionConnectorCatalog, latestActiveRental } from "./serialize";
+export { toPublicGrant } from "./public-grant";
 export {
   activateOauthGrant,
   ensurePendingConnectorGrantsForRental,
@@ -9,7 +10,6 @@ export {
   pendingGrantStubsForWorkspace,
   requestConnectorGrant,
   revokeConnectorGrant,
-  toPublicGrant,
 } from "./grants";
 export { jsonSecretLeaks, sanitizePublicMetadata } from "./secrets";
 export { resolveConnectorScope } from "./scope";
