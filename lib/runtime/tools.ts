@@ -275,6 +275,7 @@ export async function executeRuntimeTool(
           userId: context.userId,
           workspaceId: context.rental.workspaceId,
           name,
+          args,
         });
       }
       return JSON.stringify({
