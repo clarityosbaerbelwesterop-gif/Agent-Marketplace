@@ -1,6 +1,6 @@
 import { CONNECTOR_LIST, isFirstWaveConnectorId, oauthEnvConfigured } from "./registry";
 import { canonicalConnectorId } from "./aliases";
-import { toPublicGrant } from "./grants";
+import { toPublicGrant } from "./public-grant";
 import type { ConnectorCatalogItem, PublicConnectorGrant } from "./types";
 import type { AgentConnectorSpec } from "@/lib/db/json";
 
