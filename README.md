@@ -47,12 +47,12 @@ Git-triggered Vercel builds are skipped (`vercel.json` `ignoreCommand`) so pull 
 | Secret | Required | Notes |
 | --- | --- | --- |
 | `VERCEL_TOKEN` | yes | Vercel CLI token |
-| `VERCEL_ORG_ID` | recommended | From the first ensure-project job / `.vercel/project.json` `orgId` |
-| `VERCEL_PROJECT_ID` | recommended | From the first ensure-project job / `.vercel/project.json` `projectId` |
+| `VERCEL_ORG_ID` | recommended | `team_5KyyWAPW9vLU4EiaKaYZuhaG` |
+| `VERCEL_PROJECT_ID` | recommended | `prj_z15RWrRsQxcYNLHugYNtbI5iBqmn` |
 | `UNOROUTER_API_KEY` | runtime | Synced onto Vercel **production** env on deploy (not invented) |
 | `NEON_API_KEY` | no (platform) | Tenant connector secret; not a Vercel production app env |
 
-`VERCEL_ORG_ID` / `VERCEL_PROJECT_ID` are identifiers, not credentials. The workflow can create or reuse the `agent-marketplace` Vercel project with `VERCEL_TOKEN` alone, then prints the ids to add.
+The first workflow run created Vercel project `agent-marketplace`. Add `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` as GitHub Actions secrets so later deploys skip lookup. These ids are not credentials.
 
 App runtime names live on the **Vercel project** (Production scope). Copy names from `.env.example`. Do not set `MARKETPLACE_ALLOW_UNPAID_ACCESS` there.
 
