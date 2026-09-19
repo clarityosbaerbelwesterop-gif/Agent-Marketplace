@@ -41,14 +41,14 @@ export async function invokeScpHook(input: {
   const base = scpBaseUrl(env);
   if (!base) {
     return {
-      ok: true,
+      ok: false,
       wired: false,
       kind: input.kind,
       status: "stub",
       message:
         input.kind === "verify"
-          ? "Verify handed to the shared execution hook (stub). No local verifier ran."
-          : "Change request handed to the shared execution hook (stub). No merge was invented.",
+          ? "Verify is not connected. No shared execution hook is configured, so no verification ran."
+          : "Change request is not connected. No shared execution hook is configured, so no PR was opened.",
     };
   }
 
