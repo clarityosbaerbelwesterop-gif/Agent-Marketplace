@@ -53,6 +53,7 @@ Neon project (docs only): `calm-fog-88681490`, default branch `main` / `br-young
 | `lib/runtime/` | Sessions, runs, memories, skill loop, shared network mesh, group sessions, dedicated agent rooms |
 | `lib/connectors/` | First-party connector registry, grant CRUD, OAuth callbacks, runtime tools |
 | `lib/connectors/discovery/` | Catalog-only MCP registry + GitHub topic search (timeouts; not grantable) |
+| `lib/studio/` | Agent Studio canvas graph (Plan → Tools → Verify → PR) + shared-execution Verify/PR hook stubs |
 | `lib/stripe/` | Stripe client, Checkout Session create, signed webhook apply |
 | `lib/db/` | Drizzle schema, privileged client, RLS session helper |
 | `drizzle/` | SQL migrations generated/applied with drizzle-kit |
@@ -72,6 +73,7 @@ Route files live next to the URL they represent:
 - `app/connectors/page.tsx` → `/connectors` (tenant connector grants for a rental)
 - `app/connectors/discover/page.tsx` → `/connectors/discover` (catalog-only MCP search)
 - `app/login/page.tsx` → `/login` (Neon Auth sign-in / sign-up / sign-out)
+- `app/studio/page.tsx` → `/studio` (Agent Studio canvas; marketplace chrome stripped)
 - `GET /api/agents` → paginated catalog (search, category, **group** / **family**=coding|marketing|design|sales, tier, sort, page, pageSize ≤ 50)
 - `GET /api/agents/compare` → side-by-side catalog fields for up to 4 slugs (no invented benchmarks)
 - `GET /api/agents/[slug]` → agent detail + published skill package
@@ -93,6 +95,7 @@ Route files live next to the URL they represent:
 - `GET /api/connectors/discover` → catalog-only MCP server search (`q=`); official registry + GitHub topics; never installs or grants
 - `GET|POST|DELETE /api/connectors/grants` → list / request / revoke; RLS via `withUserRls`
 - `GET /api/connectors/oauth/[provider]/callback` → GitHub / Slack / Vercel OAuth code exchange
+- `POST /api/studio/runs` → one-shot Studio graph SSE (Plan → Tools → Verify → PR). Verify/PR are shared-execution hook stubs (optional `SCP_BASE_URL` / `ODIN_SCP_URL`); not a second verifier. Does not create rentals.
 
 ## Database
 

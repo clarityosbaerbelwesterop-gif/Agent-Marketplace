@@ -77,6 +77,10 @@ export function chatSessionHref(sessionId: string): string {
   return `/chat?sessionId=${encodeURIComponent(sessionId)}`;
 }
 
+export function studioHref(): string {
+  return "/studio";
+}
+
 export function groupChatHref(rentalIds: string[] = []): string {
   const unique = [...new Set(rentalIds.filter(Boolean))];
   if (unique.length === 0) {
