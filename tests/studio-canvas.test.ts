@@ -75,7 +75,7 @@ describe("studio canvas graph", () => {
 });
 
 describe("studio SCP / shared execution hooks", () => {
-  it("returns an honest stub when no hook URL is configured", async () => {
+  it("fails closed when no shared execution hook is configured", async () => {
     const result = await invokeScpHook({
       kind: "verify",
       payload: { plan: "x" },
@@ -83,8 +83,8 @@ describe("studio SCP / shared execution hooks", () => {
     });
     assert.equal(result.wired, false);
     assert.equal(result.status, "stub");
-    assert.equal(result.ok, true);
-    assert.match(result.message, /shared execution hook/i);
+    assert.equal(result.ok, false);
+    assert.match(result.message, /not connected/i);
     assert.equal(result.message.toLowerCase().includes("odin"), false);
   });
 
@@ -122,7 +122,7 @@ describe("studio SCP / shared execution hooks", () => {
 });
 
 describe("studio pipeline SSE", () => {
-  it("runs the four nodes once and encodes runtime-compatible SSE", async () => {
+  it("stops before PR when shared execution is not configured and encodes runtime-compatible SSE", async () => {
     const events: StudioEvent[] = [];
     await runStudioGraph({
       brief: "Add a preview deploy for this branch",
@@ -138,14 +138,23 @@ describe("studio pipeline SSE", () => {
     const succeeded = steps.filter((event) => event.status === "succeeded");
     assert.deepEqual(
       succeeded.map((event) => event.nodeId),
-      ["plan", "tools", "verify", "pr"],
+      ["plan", "tools"],
     );
+    const verifyFailed = steps.some(
+      (event) => event.nodeId === "verify" && event.status === "failed",
+    );
+    const prStarted = steps.some(
+      (event) => event.nodeId === "pr" && event.status === "running",
+    );
+    assert.equal(verifyFailed, true);
+    assert.equal(prStarted, false);
 
     const done = events.find((event) => event.type === "done");
     assert.equal(done?.type, "done");
     if (done?.type === "done") {
-      assert.equal(done.steps.pr, "succeeded");
-      assert.match(done.outputText, /Plan → Tools → Verify → PR/);
+      assert.equal(done.steps.verify, "failed");
+      assert.equal(done.steps.pr, "failed");
+      assert.match(done.outputText, /Verify did not complete/);
     }
 
     const encoded = encodeSse({ type: "step", nodeId: "plan", status: "running" });
