@@ -100,6 +100,7 @@ lib/unorouter/  # UnoRouter adapter + alias map
 lib/freellm/    # FreeLLM-API OpenAI-compatible failover adapter
 lib/llm/        # shared OpenAI-compat client + routing policy
 lib/connectors/ # first-party connector registry + grants
+lib/studio/     # Agent Studio graph + Verify/PR hook stubs
 lib/runtime/    # sessions, runs, memories, connector tools
 lib/stripe/     # Checkout + signed webhooks
 lib/db/         # Drizzle schema + clients
@@ -121,6 +122,7 @@ See `AGENTS.md` for conventions for coding agents.
 - `/connectors` — tenant connector grants for an active rental
 - `/connectors/discover` — catalog-only MCP registry / GitHub topic search
 - `/login` — Neon Auth sign-in / sign-up / sign-out
+- `/studio` — Agent Studio canvas (Plan → Tools → Verify → PR; no marketplace chrome)
 - `GET /api/agents` — catalog JSON (search, category, group, tier, sort, page, pageSize)
 - `POST /api/sessions` — solo `{ rentalId }` or group `{ kind: "group", rentalIds }`
 - `GET /api/agents/compare` — side-by-side compare (`slugs=a,b,c`, max 4)
@@ -140,6 +142,7 @@ See `AGENTS.md` for conventions for coding agents.
 - `GET /api/connectors/discover` — catalog-only MCP search (`q=`)
 - `GET|POST|DELETE /api/connectors/grants` — list / request / revoke
 - `GET /api/connectors/oauth/[provider]/callback` — GitHub / Slack / Vercel OAuth
+- `POST /api/studio/runs` — one-shot Studio graph SSE
 
 ## Catalog seed
 

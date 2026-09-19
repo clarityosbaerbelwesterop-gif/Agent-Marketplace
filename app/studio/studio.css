@@ -1,0 +1,64 @@
+.studio-shell {
+  --studio-bg: #07090c;
+  --studio-fg: #d7deea;
+  --studio-muted: #8090a3;
+  --studio-line: #1b2430;
+  --studio-node: #0d1219;
+  --studio-node-border: #243044;
+  --studio-accent: #7ee0b3;
+  --studio-warn: #e2c36b;
+  --studio-danger: #f07167;
+  --studio-idle: #4b5a6d;
+
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--studio-fg);
+  background-color: var(--studio-bg);
+  background-image:
+    linear-gradient(to right, rgba(125, 160, 190, 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(125, 160, 190, 0.045) 1px, transparent 1px);
+  background-size: 28px 28px;
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.studio-skip {
+  position: absolute;
+  left: 1rem;
+  top: 1rem;
+  z-index: 60;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+.studio-skip:focus {
+  width: auto;
+  height: auto;
+  clip: auto;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  background: var(--studio-accent);
+  color: #07110c;
+}
+
+.studio-node[data-status="running"] {
+  border-color: var(--studio-accent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--studio-accent) 45%, transparent);
+}
+
+.studio-node[data-status="succeeded"] {
+  border-color: color-mix(in oklab, var(--studio-accent) 70%, var(--studio-node-border));
+}
+
+.studio-node[data-status="failed"] {
+  border-color: var(--studio-danger);
+}
+
+.studio-node[data-status="queued"] {
+  border-color: var(--studio-warn);
+}

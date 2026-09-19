@@ -2,7 +2,7 @@ import type { RuntimeEvent } from "./types";
 
 const encoder = new TextEncoder();
 
-export function encodeSse(event: RuntimeEvent): Uint8Array {
+export function encodeSse<E extends { type: string }>(event: E): Uint8Array {
   return encoder.encode(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
 }
 
@@ -15,8 +15,8 @@ export function sseHeaders(): HeadersInit {
   };
 }
 
-export function createSseStream(
-  run: (emit: (event: RuntimeEvent) => Promise<void>) => Promise<void>,
+export function createSseStream<E extends { type: string } = RuntimeEvent>(
+  run: (emit: (event: E) => Promise<void>) => Promise<void>,
 ): { stream: ReadableStream<Uint8Array>; done: Promise<void> } {
   let resolveDone: () => void = () => undefined;
   const done = new Promise<void>((resolve) => {
@@ -25,7 +25,7 @@ export function createSseStream(
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
-      const emit = async (event: RuntimeEvent) => {
+      const emit = async (event: E) => {
         try {
           controller.enqueue(encodeSse(event));
         } catch {
@@ -35,7 +35,7 @@ export function createSseStream(
       void run(emit)
         .catch(async (error) => {
           const message = error instanceof Error ? error.message : "stream failed";
-          await emit({ type: "error", message, code: "unknown" });
+          await emit({ type: "error", message, code: "unknown" } as unknown as E);
         })
         .finally(() => {
           try {

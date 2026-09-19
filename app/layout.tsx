@@ -2,6 +2,7 @@ import { Newsreader, Geist, Geist_Mono } from "next/font/google";
 import type { Metadata, Viewport } from "next";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
+import { MarketplaceChrome } from "@/components/marketplace-chrome";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -45,17 +46,21 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable}`}
     >
       <body className="flex min-h-screen flex-col antialiased">
-        <a
-          href="#inhalt"
-          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-accent focus:px-3 focus:py-2 focus:text-accent-foreground"
-        >
-          Zum Inhalt
-        </a>
-        <SiteHeader />
+        <MarketplaceChrome>
+          <a
+            href="#inhalt"
+            className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-accent focus:px-3 focus:py-2 focus:text-accent-foreground"
+          >
+            Zum Inhalt
+          </a>
+          <SiteHeader />
+        </MarketplaceChrome>
         <div id="inhalt" className="flex-1">
           {children}
         </div>
-        <SiteFooter />
+        <MarketplaceChrome>
+          <SiteFooter />
+        </MarketplaceChrome>
       </body>
     </html>
   );
