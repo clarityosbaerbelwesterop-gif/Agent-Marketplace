@@ -75,7 +75,7 @@ describe("studio canvas graph", () => {
 });
 
 describe("studio SCP / shared execution hooks", () => {
-  it("returns an honest stub when no hook URL is configured", async () => {
+  it("fails closed when no hook URL is configured", async () => {
     const result = await invokeScpHook({
       kind: "verify",
       payload: { plan: "x" },
@@ -83,8 +83,8 @@ describe("studio SCP / shared execution hooks", () => {
     });
     assert.equal(result.wired, false);
     assert.equal(result.status, "stub");
-    assert.equal(result.ok, true);
-    assert.match(result.message, /shared execution hook/i);
+    assert.equal(result.ok, false);
+    assert.match(result.message, /not connected/i);
     assert.equal(result.message.toLowerCase().includes("odin"), false);
   });
 
@@ -128,7 +128,8 @@ describe("studio pipeline SSE", () => {
       brief: "Add a preview deploy for this branch",
       stepDelayMs: 0,
       runId: "run-test",
-      env: {},
+      env: { SCP_BASE_URL: "https://scp.example" },
+      fetchImpl: async () => new Response(JSON.stringify({ ok: true }), { status: 202 }),
       emit: async (event) => {
         events.push(event);
       },
@@ -155,6 +156,38 @@ describe("studio pipeline SSE", () => {
       onStep: (event) => seen.push(`${event.nodeId}:${event.status}`),
     });
     assert.deepEqual(seen, ["plan:running"]);
+  });
+
+  it("does not report Verify/PR as done when the execution hook is not configured", async () => {
+    const events: StudioEvent[] = [];
+    await runStudioGraph({
+      brief: "verify this change and open a PR",
+      stepDelayMs: 0,
+      env: {},
+      emit: async (event) => {
+        events.push(event);
+      },
+    });
+    const done = events.find((event) => event.type === "done");
+    assert.equal(done?.type, "done");
+    if (done?.type === "done") {
+      assert.equal(done.steps.plan, "succeeded");
+      assert.equal(done.steps.tools, "succeeded");
+      assert.equal(done.steps.verify, "failed");
+      assert.equal(done.steps.pr, "failed");
+      assert.match(done.outputText, /Verify did not complete/i);
+    }
+    const fakeDone = events.some(
+      (event) =>
+        event.type === "step" &&
+        (event.nodeId === "verify" || event.nodeId === "pr") &&
+        event.status === "succeeded",
+    );
+    assert.equal(fakeDone, false);
+    const prStarted = events.some(
+      (event) => event.type === "step" && event.nodeId === "pr" && event.status === "running",
+    );
+    assert.equal(prStarted, false);
   });
 
   it("does not open a PR when verify is unreachable", async () => {
