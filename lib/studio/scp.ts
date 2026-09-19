@@ -15,7 +15,7 @@ export function scpHookPath(kind: ScpHookKind): string {
 
 /**
  * MCP-shaped hook names for Verify / PR. Execution stays on the shared
- * Odin/SCP endpoint when configured — this is not a second verifier.
+ * execution endpoint when configured — this is not a second verifier.
  */
 export const SCP_HOOK_TOOLS = [
   {
@@ -41,14 +41,14 @@ export async function invokeScpHook(input: {
   const base = scpBaseUrl(env);
   if (!base) {
     return {
-      ok: true,
+      ok: false,
       wired: false,
       kind: input.kind,
       status: "stub",
       message:
         input.kind === "verify"
-          ? "Verify handed to the shared execution hook (stub). No local verifier ran."
-          : "Change request handed to the shared execution hook (stub). No merge was invented.",
+          ? "Verify is not connected. Configure the shared execution hook before this step can pass."
+          : "PR creation is not connected. Configure the shared execution hook before this step can pass.",
     };
   }
 
